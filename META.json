@@ -48,6 +48,7 @@
       },
       "test" : {
          "requires" : {
+            "Module::Build::XSUtil" : "0",
             "Test::LeakTrace" : "0",
             "Test::More" : "0.98"
          }
