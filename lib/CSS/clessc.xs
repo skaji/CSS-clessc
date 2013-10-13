@@ -37,10 +37,7 @@ PPCODE:
     if (SvROK(input) || !SvOK(input)) {
         croak("argument of CSS::clessc::less_compile() must be a string");
     }
-    STRLEN len;
-    char* ptr;
-    ptr = SvPV(input, len);
-    std::istringstream in( std::string(ptr, len) );
+    std::istringstream in( std::string(SvPV_nolen(input), SvCUR(input)) );
 
     ValueProcessor vp;
     ParameterRulesetLibrary pr(&vp);
