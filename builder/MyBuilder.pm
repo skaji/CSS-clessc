@@ -10,7 +10,7 @@ sub new {
     my $self = $class->SUPER::new(
         generate_ppport_h    => "lib/CSS/ppport.h",
         needs_compiler_cpp   => 1,
-        extra_compiler_flags => "-Iclessc/src",
+        include_dirs         => "clessc/src",
         extra_linker_flags   => "-Lclessc/src -llessc",
         @_,
     );
@@ -34,6 +34,13 @@ sub ACTION_clean {
         system "cd clessc && $Config{make} clean &>/dev/null";
     }
     $self->SUPER::ACTION_clean(@_);
+}
+sub ACTION_realclean {
+    my $self = shift;
+    if (-f "clessc/Makefile") {
+        system "cd clessc && $Config{make} distclean &>/dev/null";
+    }
+    $self->SUPER::ACTION_realclean(@_);
 }
 
 1;
