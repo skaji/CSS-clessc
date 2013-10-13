@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use utf8;
 
-use Module::Build::XSUtil;
+use builder::MyBuilder;
 use File::Basename;
 use File::Spec;
 use CPAN::Meta;
@@ -28,23 +28,18 @@ my %args = (
     allow_pureperl => 0,
 
     script_files => [glob('script/*'), glob('bin/*')],
-    c_source     => [qw(clessc/src)],
+    c_source     => [qw()],
     PL_files => {},
 
     test_files           => ((-d '.git' || $ENV{RELEASE_TESTING}) && -d 'xt') ? 't/ xt/' : 't/',
     recursive_test_files => 1,
     
-    needs_compiler_c99 => 0,
-    needs_compiler_cpp => 1,
-    generate_ppport_h => 'lib/CSS/ppport.h',
-    generate_xshelper_h => '0',
-    cc_warnings => 0,
 );
 if (-d 'share') {
     $args{share_dir} = 'share';
 }
 
-my $builder = Module::Build::XSUtil->subclass(
+my $builder = builder::MyBuilder->subclass(
     class => 'MyBuilder',
     code => q{
         sub ACTION_distmeta {

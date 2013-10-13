@@ -1,6 +1,5 @@
 name = "CSS-clessc"
-c_source = ["clessc/src"]
 
-[XSUtil]
-needs_compiler_cpp = 1
-generate_ppport_h = "lib/CSS/ppport.h"
+[build]
+build_class = "builder::MyBuilder"
+
