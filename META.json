@@ -1,0 +1,69 @@
+{
+   "abstract" : "binding for clessc",
+   "author" : [
+      "Shoichi Kaji <skaji@outlook.com>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Minilla/v0.7.5, CPAN::Meta::Converter version 2.120921",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "CSS-clessc",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "xt",
+         "inc",
+         "share",
+         "eg",
+         "examples",
+         "author",
+         "builder"
+      ]
+   },
+   "prereqs" : {
+      "configure" : {
+         "requires" : {
+            "CPAN::Meta" : "0",
+            "CPAN::Meta::Prereqs" : "0",
+            "Module::Build::XSUtil" : "0.03"
+         }
+      },
+      "develop" : {
+         "requires" : {
+            "Test::CPAN::Meta" : "0",
+            "Test::MinimumVersion" : "0.10108",
+            "Test::Pod" : "1.41",
+            "Test::Spellunker" : "v0.2.7"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "perl" : "5.008005"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Test::LeakTrace" : "0",
+            "Test::More" : "0.98"
+         }
+      }
+   },
+   "release_status" : "unstable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/shoichikaji/CSS-clessc/issues"
+      },
+      "homepage" : "https://github.com/shoichikaji/CSS-clessc",
+      "repository" : {
+         "type" : "git",
+         "url" : "git://github.com/shoichikaji/CSS-clessc.git",
+         "web" : "https://github.com/shoichikaji/CSS-clessc"
+      }
+   },
+   "version" : "0.01"
+}

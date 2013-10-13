@@ -1,0 +1,3 @@
+[submodule "clessc"]
+	path = clessc
+	url = git://github.com/BramvdKroef/clessc.git

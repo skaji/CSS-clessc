@@ -1,0 +1,339 @@
+/* Variables */
+
+@nice-blue: #5B83AD;
+@light-blue: @nice-blue + #111; 
+
+#header { color: @light-blue; }
+
+@fnord: ('I am f\'nord.' + " ") * 2;
+@var: 'fnord';
+.class {
+    content: @@var;
+}
+
+// Causes a warning
+@var: 'defined twice';
+
+/* Mixins */
+
+.bordered {
+  border-top: dotted 1px black;
+  border-bottom: solid 2px black;
+}
+
+#menu a {
+    color: #111;
+    .bordered; 
+}
+.post a {
+    color: red;
+    .bordered;
+}
+
+/* Parametric Mixins */
+@radius: 5px;
+.border-radius(@radius) {
+  border-radius: @radius;
+  -moz-border-radius: @radius;
+  -webkit-border-radius: @radius;
+}
+
+#header {
+    .border-radius(4px );
+}
+.button {
+    .border-radius (6px); 
+}
+
+.wrap () {
+  text-wrap: wrap;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  word-wrap: break-word;
+}
+
+pre { .wrap  }
+
+.mixin(@color) {
+  color-1: @color;
+}
+.mixin(@color; @padding:2) {
+  color-2: @color;
+  padding-2: @padding;
+}
+.mixin(@color; @padding; @margin: 2) {
+  color-3: @color;
+  padding-3: @padding;
+  margin: @margin @margin @margin @margin;
+}
+.some .selector div {
+  .mixin(#008000);
+}
+
+.mixin2 (@a) {
+  color: @a;
+}
+.mixin2 (@a; @b) {
+  color: fadeout(@a; @b);
+}
+.test mixin2a {
+    .mixin2(#000);
+}
+.test mixin2b {
+    .mixin2(#000, 50%);
+}
+
+/* The @arguments variable */
+
+.box-shadow (@x: 0, @y: 0, @blur: 1px, @color: #000) {
+  box-shadow: @arguments;
+  -moz-box-shadow: @arguments;
+  -webkit-box-shadow: @arguments;
+}
+.box-shadow2 (@x, @y, @blur, @color) {
+    box-shadow: @arguments;
+    -moz-box-shadow: @arguments;
+    -webkit-box-shadow: @arguments;
+}
+.box-shadow3 (@x; @y; @blur: 1px; @color: #000) {
+    box-shadow: @arguments;
+    -moz-box-shadow: @arguments;
+    -webkit-box-shadow: @arguments;
+}
+
+.class {
+    .box-shadow(2px, 5px);
+    .box-shadow2(4px, 10px, 2px, #000);
+    .box-shadow3(8px, 20px);
+}
+
+/* Rest arguments */
+
+.mixin3 (...) {
+    border1: 1px #000 solid;
+}
+.mixin3 (@a: 1px; ...) {
+    border2: @a #000 solid;
+}
+.mixin3 (@rest...) {
+    border3: @rest;
+}
+
+.test mixin3 {
+    .mixin3(4px, #456, dashed);
+}
+
+/* Nested rules */
+#header {
+  color: black;
+
+  .navigation {
+      font-size: 12px;
+  }
+  .logo {
+      width: 300px;
+      &:hover { text-decoration: none }
+
+      &:hover,
+      &:focus{ text-decoration: none }
+
+      h2 a {
+          height: 10px;
+      } 
+      a:hover {
+          text-decoration: underline;
+      }
+      div, span {
+          color: #FFF;
+      }
+  }
+}
+
+#header {
+    .class1, .class2 {
+      a {
+          font-weight: bold;
+      }
+  }
+}
+
+/* Operations */
+
+@base: 5%;
+@filler: @base * 2;
+@other: @base + @filler;
+@width: 10px;
+@number: 10;
+@emUnits: 5em + unit(@width, em);
+
+.class {
+    background-color: @base + #111;
+    width: (@width + 5) * 2;
+    border: @width * 2 solid black;
+    height: 100% / 2 + @filler;
+    top: @emUnits;
+}
+
+/* Color Functions */
+
+@color: #d41212;
+.class {
+    color: lighten(@color, 10%);
+    color: darken(@color, 10%);
+    color: saturate(@color, 10%);
+    color: desaturate(@color, 10%);
+
+    color: fadein(@color, 10%);
+    color: fadeout(@color, 10%);
+
+    color: spin(@color, 10);
+    color: spin(@color, -10);
+    color: hsl(hue(@color), 45%, 90%);
+    clip: rect(1px, 1px, 1px, 1px);
+    .mixin2(lighten(#000, 10%));
+}
+
+
+/* Namespaces */
+
+#bundle {
+    .button () {
+        display: block;
+        border: 1px solid black;
+        background-color: grey;
+        &:hover { background-color: white }
+
+        // This will cause a warning.
+        .nestedPar () {
+            color: #F00;
+        }
+        
+        span {
+            a {
+                display: none;
+            }
+        }
+    }
+    .tab { }
+    .citation { } 
+}
+
+#header a {
+    color: orange;
+    #bundle .button;
+}
+
+/* Scope */
+
+@scopevar: red;
+
+#page {
+    @scopevar: white;
+    #header {
+        color: @scopevar; // white
+    }
+
+}
+
+#footer {
+    color: @scopevar; // red
+}
+
+/* comments */
+
+// comment 
+
+/* Importing */
+
+@import "lib.less";
+@import "lib.css";
+
+.lib-test {
+    .lib-mixin(#123);
+}
+
+/* String interpolation */
+
+@base-url: "http://assets.fnord.com";
+.class {
+    background-image: url("@{base-url}/images/bg.png");
+}
+
+.class {
+  filter: ~"progid:DXImageTransform.Microsoft.AlphaImageLoader(src='image.png')";
+}
+
+body {
+    background-image: linear-gradient(bottom, rgb(232,63,25) 0%,
+                                      rgb(255,130,95) 50%);
+    width: 10-1;
+    filter:progid:DXImageTransform.Microsoft.gradient(enabled='false',startColorstr=#57ba52,endColorstr=#2c9027,GradientType=0);         
+}
+
+video {
+    *zoom: 1;
+}
+
+// not a parameter ruleset
+audio:not([controls]) {
+    display: none;
+}
+
+.mixin5 (@a) when (lightness(@a) >= 50%) {
+  background-color: black;
+}
+.mixin5 (@a) when (lightness(@a) < 50%) {
+  background-color: white;
+}
+.mixin5 (@a) {
+  color: @a;
+}
+
+.class1 { .mixin5(#ddd) }
+.class2 { .mixin5(#555) }
+
+
+.test (@h) {
+    h1{
+        color:white;
+        height: @h;
+      } 
+}
+.test(20px);
+
+.test1 (@FooterHeight) {
+    test1: 1px;
+    
+    footer,
+    .push {
+        height: @FooterHeight;
+    }
+}
+
+.test2 (@H_H, @F_H)  {
+    test2: 1px;
+    .test1(@F_H);
+    
+    header {
+        height: @H_H;
+    }
+}
+
+body {
+    .test2(90px, 60px);
+}
+
+.test5 {
+    @image: url('test.png');
+    background: url(test.png) no-repeat;
+    width: imgwidth(@image);
+    height: imgheight(@image);
+
+    @image2: url('test.jpg');
+    width-jpg: imgwidth(@image2);
+    height-jpg: imgheight(@image2);
+}
+
+/* Multiline comment ending with * at the end of the file */
+/*
+**/
