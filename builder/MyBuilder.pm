@@ -11,7 +11,9 @@ sub new {
         @_,
         generate_ppport_h    => "lib/CSS/ppport.h",
         needs_compiler_cpp   => 1,
-        include_dirs         => "clessc/src",
+
+        # c_source dirs are automatically added to include_dirs
+        # include_dirs       => "clessc/src",
         c_source             => [qw(clessc/src)],
     );
 }
