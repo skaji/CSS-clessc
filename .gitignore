@@ -24,3 +24,6 @@ cover_db/
 MYMETA.*
 
 /CSS-clessc-*
+
+lib/CSS/clessc.c
+lib/CSS/ppport.h

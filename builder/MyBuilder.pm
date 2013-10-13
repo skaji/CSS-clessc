@@ -8,22 +8,26 @@ use Config;
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new(
+        @_,
         generate_ppport_h    => "lib/CSS/ppport.h",
         needs_compiler_cpp   => 1,
         include_dirs         => "clessc/src",
-        extra_linker_flags   => "-Lclessc/src -llessc",
-        @_,
+        c_source             => [qw(clessc/src)],
     );
 }
 
 sub ACTION_code {
     my $self = shift;
     if (!-f "clessc/src/liblessc.a") {
-        !system join(' && ',
+        $self->do_system(join(' && ',
             "cd clessc",
             "./configure --without-libpng --without-libjpeg",
-            $Config{make},
-        ) or die "failed to make clessc";
+        )) if !-f "clessc/Makefile";
+
+        $self->do_system(join(' && ',
+            "cd clessc/src",
+            "$Config{make} liblessc.a",
+        )) or die "failed to make clessc";
     }
     $self->SUPER::ACTION_code(@_);
 }
@@ -31,14 +35,16 @@ sub ACTION_code {
 sub ACTION_clean {
     my $self = shift;
     if (-f "clessc/Makefile") {
-        system "cd clessc && $Config{make} clean &>/dev/null";
+        $self->do_system("cd clessc && $Config{make} clean &>/dev/null");
     }
     $self->SUPER::ACTION_clean(@_);
 }
 sub ACTION_realclean {
     my $self = shift;
     if (-f "clessc/Makefile") {
-        system "cd clessc && $Config{make} distclean &>/dev/null";
+        $self->do_system(
+            "cd clessc && $Config{make} distclean &>/dev/null"
+        );
     }
     $self->SUPER::ACTION_realclean(@_);
 }
