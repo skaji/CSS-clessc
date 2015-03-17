@@ -4,7 +4,7 @@
       "Shoichi Kaji <skaji@outlook.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v0.7.5, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "Minilla/v2.3.0, CPAN::Meta::Converter version 2.143240",
    "license" : [
       "perl_5"
    ],
@@ -28,15 +28,18 @@
    "prereqs" : {
       "configure" : {
          "requires" : {
-            "CPAN::Meta" : "0",
-            "CPAN::Meta::Prereqs" : "0",
-            "Module::Build" : "0.38"
+            "Devel::CheckBin" : "0",
+            "File::pushd" : "0",
+            "Module::Build" : "0.38",
+            "Module::Build::XSUtil" : "0",
+            "parent" : "0"
          }
       },
       "develop" : {
          "requires" : {
             "Test::CPAN::Meta" : "0",
-            "Test::MinimumVersion" : "0.10108",
+            "Test::MinimumVersion::Fast" : "0.04",
+            "Test::PAUSE::Permissions" : "0.04",
             "Test::Pod" : "1.41",
             "Test::Spellunker" : "v0.2.7"
          }
@@ -48,7 +51,6 @@
       },
       "test" : {
          "requires" : {
-            "Module::Build::XSUtil" : "0",
             "Test::LeakTrace" : "0",
             "Test::More" : "0.98"
          }
@@ -66,5 +68,8 @@
          "web" : "https://github.com/shoichikaji/CSS-clessc"
       }
    },
-   "version" : "0.01"
+   "version" : "0.01",
+   "x_contributors" : [
+      "Shoichi Kaji <skaji@cpan.org>"
+   ]
 }
