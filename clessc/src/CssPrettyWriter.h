@@ -25,13 +25,23 @@
 #include "CssWriter.h"
 
 class CssPrettyWriter: public CssWriter {
+private:
+  int indent_size;
+  
 public:
-  CssPrettyWriter(ostream* out): CssWriter(out) {
+  CssPrettyWriter(ostream &out): CssWriter(out) {
+    indent_size = 0;
   };
 
 protected:
-  void writeAtRule(AtRule* rule);
-  void writeRuleset(Ruleset* ruleset);
+  void indent();
+  virtual void writeAtRule(const string &keyword, const TokenList &rule);
+  virtual void writeRulesetStart(const TokenList &selector);
+  virtual void writeRulesetEnd();
+  virtual void writeDeclaration(const string &property, const TokenList &value);
+  virtual void writeDeclarationDeliminator();
+  virtual void writeMediaQueryStart(const TokenList &selector);
+  virtual void writeMediaQueryEnd();
 };
 
 #endif

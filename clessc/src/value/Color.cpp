@@ -24,6 +24,10 @@
 #include <sstream>
 #include <iostream>
 
+#define max(x,y) x > y ? x : y
+#define min(x,y) x < y ? x : y
+
+
 template <class T>
 inline std::string to_string (const T& t)
 {
@@ -32,37 +36,101 @@ inline std::string to_string (const T& t)
   return ss.str();
 }
 
-double Color::maxArray(double* array, int len) {
+double Color::maxArray(double* array, const size_t len) {
   double ret = array[0];
-  for (int i = 0; i < len; i++)
+  for (size_t i = 1; i < len; i++)
     ret = max(ret, array[i]);
   return ret;
 }
-double Color::minArray(double* array, int len) {
+double Color::minArray(double* array, const size_t len) {
   double ret = array[0];
-  for (int i = 0; i < len; i++) 
+  for (size_t i = 1; i < len; i++) 
     ret = min(ret, array[i]);
   return ret;
 }
 
-Color::Color(Token* token): Value() {
+void Color::updateTokens() {
+  ostringstream stm;
+  string sColor[3];
+  string hash;
+  int i;
+
+  tokens.clear();
+  
+  // If the color is not opaque the rgba() function needs to be used.
+  if (alpha < 1) {
+    tokens.push_back(Token("rgba", Token::IDENTIFIER));
+    tokens.push_back(Token("(", Token::PAREN_OPEN));
+
+    for (i = 0; i < 3; i++) {
+      stm.str("");
+      stm << (color[i] & 0xFF);
+      tokens.push_back(Token(stm.str(), Token::NUMBER));
+      tokens.push_back(Token(",", Token::OTHER));
+    }
+    stm.str("");
+    stm << alpha;
+    tokens.push_back(Token(stm.str(), Token::NUMBER));
+    tokens.push_back(Token(")", Token::PAREN_CLOSED));
+
+  } else {
+  
+    for (i = 0; i < 3; i++) {
+      stm.str("");
+      stm << hex << (color[i] & 0xFF);
+      sColor[i] = stm.str();
+    }
+    stm.str("");
+    stm << "#";
+  
+    for (i = 0; i < 3; i++) {
+      if (sColor[i].size() == 1)
+        stm << "0";
+      else if (sColor[i].size() > 2) 
+        sColor[i] = sColor[i].substr(0, 2);
+      stm << sColor[i];
+    }
+    hash = stm.str();
+
+    // convert to shorthand if possible
+    if (hash[1] == hash[2] &&
+        hash[3] == hash[4] &&
+        hash[5] == hash[6]) {
+      stm.str("");
+      stm << "#" << hash[1] << hash[3] << hash[5];
+      hash = stm.str();
+    }
+
+    tokens.push_back(Token(hash, Token::HASH));
+  }
+}
+
+Color::Color(): Value() {
+  type = Value::COLOR;
+  color[RGB_RED] = 0;
+  color[RGB_GREEN] = 0;
+  color[RGB_BLUE] = 0;
+  alpha = 1;
+  updateTokens();
+}
+
+Color::Color(Token &token): Value() {
   int len;
 
-  this->tokens.push(token);
-  valueChanged = false;
+  this->tokens.push_back(token);
     
   type = Value::COLOR;
   
-  if (token->str.size() == 4)
+  if (token.size() == 4)
     len = 1;
-  else if (token->str.size() == 7)
+  else if (token.size() == 7)
     len = 2;
   else {
     throw new ValueException("A color value requires either three or six hexadecimal characters.");
   }
   
   for (int i = 0; i < 3; i++) {
-    istringstream stm(token->str.substr(1 + (i * len), len));
+    istringstream stm(token.substr(1 + (i * len), len));
     stm >> hex >> color[i];
     if (len == 1)
       color[i] = color[i] * 0x11;
@@ -75,7 +143,7 @@ Color::Color(unsigned int red, unsigned int green, unsigned int blue): Value() {
   color[RGB_GREEN] = green;
   color[RGB_BLUE] = blue;
   alpha = 1;
-  valueChanged = true;
+  updateTokens();
 }
 Color::Color(unsigned int red, unsigned int green, unsigned int blue,
              double alpha): Value() { 
@@ -84,188 +152,145 @@ Color::Color(unsigned int red, unsigned int green, unsigned int blue,
   color[RGB_GREEN] = green;
   color[RGB_BLUE] = blue;
   this->alpha = alpha;
-  valueChanged = true;
+  updateTokens();
 }
 
+Color::Color(const Color &color) {
+  Color(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());
+}
 Color::~Color() {
 }
 
-TokenList* Color::getTokens() {
-  ostringstream stm;
-  string sColor[3];
-  string hash;
-  int i;
-
-  if (!valueChanged)
-    return &tokens;
-
-  tokens.clear();
+Value* Color::add(const Value &v) const {
+  const Color* c;
+  const NumberValue* n;
+  const StringValue* s;
+  StringValue* ret;
   
-  // If the color is not opaque the rgba() function needs to be used.
-  if (alpha < 1) {
-    tokens.push(new Token("rgba", Token::IDENTIFIER));
-    tokens.push(new Token("(", Token::PAREN_OPEN));
+  switch (v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+    return new Color(color[RGB_RED] + c->getRed(),
+                     color[RGB_GREEN] + c->getGreen(),
+                     color[RGB_BLUE] + c->getBlue());
+  case NUMBER:
+  case PERCENTAGE:
+  case DIMENSION:
+    n = static_cast<const NumberValue*>(&v);
+    return new Color(color[RGB_RED] + n->getValue(),
+                     color[RGB_GREEN] + n->getValue(),
+                     color[RGB_BLUE] + n->getValue());
 
-    for (i = 0; i < 3; i++) {
-      stm.str("");
-      stm << (color[i] & 0xFF);
-      tokens.push(new Token(stm.str(), Token::NUMBER));
-      tokens.push(new Token(",", Token::OTHER));
-    }
-    stm.str("");
-    stm << alpha;
-    tokens.push(new Token(stm.str(), Token::NUMBER));
-    tokens.push(new Token(")", Token::PAREN_CLOSED));
-    valueChanged = false;
-    return &tokens;
+  case STRING:
+    s = static_cast<const StringValue*>(&v);
+    ret = new StringValue(*this, s->getQuotes());
+    ret->append(*s);
+    return ret;
+    
+  default:
+    throw new ValueException("You can only add colors with other \
+colors, numbers or strings.");
   }
-  
-  for (i = 0; i < 3; i++) {
-    stm.str("");
-    stm << hex << (color[i] & 0xFF);
-    sColor[i] = stm.str();
-  }
-  stm.str("");
-  stm << "#";
-  
-  for (i = 0; i < 3; i++) {
-    if (sColor[i].size() == 1)
-      stm << "0";
-    else if (sColor[i].size() > 2) 
-      sColor[i] = sColor[i].substr(0, 2);
-    stm << sColor[i];
-  }
-  hash = stm.str();
-
-  // convert to shorthand if possible
-  if (hash[1] == hash[2] &&
-      hash[3] == hash[4] &&
-      hash[5] == hash[6]) {
-    stm.str("");
-    stm << "#" << hash[1] << hash[3] << hash[4];
-    hash = stm.str();
-  }
-
-  tokens.push(new Token(hash, Token::HASH));
-  valueChanged = false;
-  return &tokens;
 }
-Value* Color::add(Value* v) {
-  Color* c;
-  NumberValue* n;
-  StringValue* s;
-  string* str;
+Value* Color::substract(const Value &v) const {
+  const Color* c;
+  const NumberValue* n;
   
-  if (v->type == COLOR) {
-    c = static_cast<Color*>(v);
-    color[RGB_RED] += c->getRed();
-    color[RGB_GREEN] += c->getGreen();
-    color[RGB_BLUE] += c->getBlue();
-  } else if (v->type == NUMBER ||
-             v->type == PERCENTAGE ||
-             v->type == DIMENSION) {
-    n = static_cast<NumberValue*>(v);
-    color[RGB_RED] += n->getValue();
-    color[RGB_GREEN] += n->getValue();
-    color[RGB_BLUE] += n->getValue();
-  } else if(v->type == STRING) {
-    str = this->getTokens()->toString();
-    s = new StringValue(new Token(*str, Token::STRING),
-                        ((StringValue*)v)->getQuotes());
-    s->add(v);
-    delete str;
-    return s;
-  }
-  valueChanged = true;
-  return this;
-}
-Value* Color::substract(Value* v) {
-  Color* c;
-  NumberValue* n;
-  
-  if (v->type == COLOR) {
-    c = static_cast<Color*>(v);
-    color[RGB_RED] = color[RGB_RED] > c->getRed() ?
-      color[RGB_RED] - c->getRed() : 0;
-    color[RGB_GREEN] = color[RGB_GREEN] > c->getGreen() ?
-      color[RGB_GREEN] - c->getGreen() : 0;
-    color[RGB_BLUE] = color[RGB_BLUE] > c->getBlue() ?
-      color[RGB_BLUE] - c->getBlue() : 0;
-  } else if (v->type == Value::NUMBER ||
-             v->type == Value::PERCENTAGE ||
-             v->type == Value::DIMENSION) {
-    n = static_cast<NumberValue*>(v);
-    color[RGB_RED] -= n->getValue();
-    color[RGB_GREEN] -= n->getValue();
-    color[RGB_BLUE] -= n->getValue();
-  } else {
+  switch (v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+    return new Color(max(color[RGB_RED] - c->getRed(), 0),
+                     max(color[RGB_GREEN] - c->getGreen(), 0),
+                     max(color[RGB_BLUE] - c->getBlue(), 0));
+
+  case NUMBER:
+  case PERCENTAGE:
+  case DIMENSION:
+    n = static_cast<const NumberValue*>(&v);
+
+    return new Color(max(color[RGB_RED] - n->getValue(), 0),
+                     max(color[RGB_GREEN] - n->getValue(), 0),
+                     max(color[RGB_BLUE] - n->getValue(), 0));
+  default:
     throw new ValueException("You can only substract a color or \
 a number from a color.");
   }
-  valueChanged = true;
-  return this;
 }
 
-Value* Color::multiply(Value* v) {
-  Color* c;
-  NumberValue* n;
-  int result;
+Value* Color::multiply(const Value &v) const {
+  const Color* c;
+  const NumberValue* n;
   
-  if (v->type == COLOR) {
-    c = static_cast<Color*>(v);
-    result = color[RGB_RED] * c->getRed();
-    color[RGB_RED] = max(min(result, 255), 0);
-    result = color[RGB_GREEN] * c->getGreen();
-    color[RGB_GREEN] = max(min(result, 255), 0);
-    result = color[RGB_BLUE] * c->getBlue();
-    color[RGB_BLUE] = max(min(result, 255), 0);
-  } else if (v->type == Value::NUMBER ||
-             v->type == Value::PERCENTAGE ||
-             v->type == Value::DIMENSION) {
-    n = static_cast<NumberValue*>(v);
-    color[RGB_RED] *= n->getValue();
-    color[RGB_GREEN] *= n->getValue();
-    color[RGB_BLUE] *= n->getValue();
-  } else {
+  switch (v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+
+    return new Color(max(color[RGB_RED] * c->getRed(), 255),
+                     max(color[RGB_GREEN] * c->getGreen(), 255),
+                     max(color[RGB_BLUE] * c->getBlue(), 255));
+  case NUMBER:
+  case PERCENTAGE:
+  case DIMENSION:
+    n = static_cast<const NumberValue*>(&v);
+    return new Color(max(color[RGB_RED] * n->getValue(), 255),
+                     max(color[RGB_GREEN] * n->getValue(), 255),
+                     max(color[RGB_BLUE] * n->getValue(), 255));
+
+  default:
     throw new ValueException("You can only multiply a color by a \
 color or a number.");
   }
-  valueChanged = true;
-  return this;
 }
-Value* Color::divide(Value* v) {
-  Color* c;
-  NumberValue* n;
+Value* Color::divide(const Value &v) const {
+  const Color* c;
+  const NumberValue* n;
   
-  if (v->type == COLOR) {
-    c = static_cast<Color*>(v);
-    color[RGB_RED] /= c->getRed();
-    color[RGB_GREEN] /= c->getGreen();
-    color[RGB_BLUE] /= c->getBlue();
-  } else if (v->type == Value::NUMBER ||
-             v->type == Value::PERCENTAGE ||
-             v->type == Value::DIMENSION){
-    n = static_cast<NumberValue*>(v);
-    color[RGB_RED] /= n->getValue();
-    color[RGB_GREEN] /= n->getValue();
-    color[RGB_BLUE] /= n->getValue();
-  } else {
+  switch (v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+    return new Color(color[RGB_RED] / c->getRed(),
+                     color[RGB_GREEN] / c->getGreen(),
+                     color[RGB_BLUE] / c->getBlue());
+  case NUMBER:
+  case PERCENTAGE:
+  case DIMENSION:
+    n = static_cast<const NumberValue*>(&v);
+    return new Color(color[RGB_RED] / n->getValue(),
+                     color[RGB_GREEN] / n->getValue(),
+                     color[RGB_BLUE] / n->getValue());
+  default:
     throw new ValueException("You can only divide a color by a \
 color or a number.");
   }
-  valueChanged = true;
-  return this;
 }
 
-int Color::compare(Value* v) {
-  Color* c;
-  
-  if (v->type == COLOR) {
-    c = (Color*)v;
-    return (color[RGB_RED] + color[RGB_GREEN] + color[RGB_BLUE]) -
-      (c->getRed() + c->getGreen() + c->getBlue());
-  } else {
+BooleanValue* Color::equals(const Value &v) const {
+  const Color* c;
+
+  switch(v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+    return new BooleanValue(color[RGB_RED] == c->getRed() &&
+                            color[RGB_GREEN] == c->getGreen() &&
+                            color[RGB_BLUE] == c->getBlue());
+  default:
     throw new ValueException("You can only compare a color with a *color*.");
+
+  }
+}
+
+BooleanValue* Color::lessThan(const Value &v) const {
+  const Color* c;
+
+  switch(v.type) {
+  case COLOR:
+    c = static_cast<const Color*>(&v);
+    return new BooleanValue(color[RGB_RED] < c->getRed() ||
+                            color[RGB_GREEN] < c->getGreen() ||
+                            color[RGB_BLUE] < c->getBlue());
+  default:
+    throw new ValueException("You can only compare a color with a *color*.");
+
   }
 }
     
@@ -317,24 +342,30 @@ void Color::setHSL(double hue, double saturation, double lightness) {
     // add the .5 and truncate to round to int.
     color[i] = rgb[i] * 255 + 0.5;
   }
-  valueChanged = true;
+  updateTokens();
 }
 
-void Color::setAlpha(double alpha) {
-  this->alpha = alpha;
-  valueChanged = true;
+void Color::setRGB(unsigned int red, unsigned int green, unsigned int blue) {
+  color[RGB_RED] = red;
+  color[RGB_GREEN] = green;
+  color[RGB_BLUE] = blue;
+  updateTokens();
 }
-double Color::getAlpha() {
+void Color::setAlpha(double alpha) {
+  this->alpha = min(max(alpha, 0.0), 1.0);
+  updateTokens();
+}
+double Color::getAlpha() const {
   return alpha;
 }
 
-unsigned int Color::getRed() {
+unsigned int Color::getRed() const {
   return color[RGB_RED];
 }
-unsigned int Color::getGreen() {
+unsigned int Color::getGreen() const {
   return color[RGB_GREEN];
 }
-unsigned int Color::getBlue() {
+unsigned int Color::getBlue() const {
   return color[RGB_BLUE];
 }
 
@@ -376,20 +407,25 @@ double* Color::getHSL() {
 }
 
 
-void Color::loadFunctions(FunctionLibrary* lib) {
-  lib->push("rgb", "NNN", &Color::rgb);
-  lib->push("rgba", "NNN.", &Color::rgba);
-  lib->push("lighten", "CP", &Color::lighten);
-  lib->push("darken", "CP", &Color::darken);
-  lib->push("saturate", "CP", &Color::saturate);
-  lib->push("desaturate", "CP", &Color::desaturate);
-  lib->push("fadein", "CP", &Color::fadein);
-  lib->push("fadeout", "CP", &Color::fadeout);
-  lib->push("spin", "CN", &Color::spin);
-  lib->push("hsl", "NPP", &Color::hsl);
-  lib->push("hue", "C", &Color::hue);
-  lib->push("saturation", "C", &Color::saturation);
-  lib->push("lightness", "C", &Color::lightness);
+void Color::loadFunctions(FunctionLibrary &lib) {
+  lib.push("rgb", "NNN", &Color::rgb);
+  lib.push("rgba", "NNN.", &Color::rgba);
+  lib.push("lighten", "CP", &Color::lighten);
+  lib.push("darken", "CP", &Color::darken);
+  lib.push("saturate", "CP", &Color::saturate);
+  lib.push("desaturate", "CP", &Color::desaturate);
+  lib.push("fadein", "CP", &Color::fadein);
+  lib.push("fadeout", "CP", &Color::fadeout);
+  lib.push("spin", "CN", &Color::spin);
+  lib.push("hsl", "NPP", &Color::hsl);
+  lib.push("hue", "C", &Color::hue);
+  lib.push("saturation", "C", &Color::saturation);
+  lib.push("lightness", "C", &Color::lightness);
+  lib.push("argb", "C", &Color::argb);
+  lib.push("red", "C", &Color::red);
+  lib.push("blue", "C", &Color::blue);
+  lib.push("green", "C", &Color::green);
+  lib.push("alpha", "C", &Color::_alpha);
 }
 
 Value* Color::rgb(vector<Value*> arguments) {
@@ -454,7 +490,7 @@ Value* Color::fadein(vector<Value*> arguments) {
   double alpha = ((Color*)arguments[0])->getAlpha();
   double value = ((NumberValue*)arguments[1])->getValue();
 
-  ((Color*)arguments[0])->setAlpha(alpha * min(1 + value * .01, 100.00));
+  ((Color*)arguments[0])->setAlpha(alpha + value * .01);
   return arguments[0];
 }
 
@@ -462,7 +498,7 @@ Value* Color::fadeout(vector<Value*> arguments) {
   double alpha = ((Color*)arguments[0])->getAlpha();
   double value = ((NumberValue*)arguments[1])->getValue();
 
-  ((Color*)arguments[0])->setAlpha(alpha * max(1 - value * .01, 0.00));
+  ((Color*)arguments[0])->setAlpha(alpha - value * .01);
   return arguments[0];
 }
 
@@ -487,25 +523,105 @@ Value* Color::hsl(vector<Value*> arguments) {
 Value* Color::hue(vector<Value*> arguments) {
   double* hsl = ((Color*)arguments[0])->getHSL();
   string degrees;
+  Token t;
 
   degrees.append(to_string(hsl[0]));
-  return new NumberValue(new Token(degrees, Token::NUMBER));
+  t = Token(degrees, Token::NUMBER);
+  return new NumberValue(t);
 }
 
 Value* Color::saturation(vector<Value*> arguments) {
   double* hsl = ((Color*)arguments[0])->getHSL();
   string percentage;
+  Token t;
 
   percentage.append(to_string(hsl[1] * 100));
   percentage.append("%");
-  return new NumberValue(new Token(percentage, Token::PERCENTAGE));
+  t = Token(percentage, Token::PERCENTAGE);
+  return new NumberValue(t);
 }
 
 Value* Color::lightness(vector<Value*> arguments) {
   double* hsl = ((Color*)arguments[0])->getHSL();
   string percentage;
+  Token t;
 
   percentage.append(to_string(hsl[2] * 100));
   percentage.append("%");
-  return new NumberValue(new Token(percentage, Token::PERCENTAGE));
+  t = Token(percentage, Token::PERCENTAGE);
+  return new NumberValue(t);
+}
+Value* Color::argb(vector<Value*> arguments) {
+  Color* c = (Color*)arguments[0];
+  ostringstream stm;
+  unsigned int color[4];
+  string sColor[4];
+  string hash;
+  int i;
+  Token t;
+
+  color[0] = c->getAlpha() * 0xFF + 0.5;
+  color[1] = c->getRed();
+  color[2] = c->getGreen();
+  color[3] = c->getBlue();
+  
+  for (i = 0; i < 4; i++) {
+    stm.str("");
+    stm << hex << (color[i] & 0xFF);
+    sColor[i] = stm.str();
+  }
+  stm.str("");
+  stm << "#";
+  
+  for (i = 0; i < 4; i++) {
+    if (sColor[i].size() == 1)
+      stm << "0";
+    else if (sColor[i].size() > 2) 
+      sColor[i] = sColor[i].substr(0, 2);
+    stm << sColor[i];
+  }
+  hash = stm.str();
+  t = Token(hash, Token::STRING);
+  return new StringValue(t, false);
+}
+
+Value* Color::red(vector<Value*> arguments) {
+  Color* c = (Color*)arguments[0];
+  ostringstream stm;
+  Token t;
+
+  stm.str("");
+  stm << c->getRed();
+  t = Token(stm.str(), Token::NUMBER);
+  return new NumberValue(t);
+}
+Value* Color::blue(vector<Value*> arguments) {
+  Color* c = (Color*)arguments[0];
+  ostringstream stm;
+  Token t;
+
+  stm.str("");
+  stm << c->getBlue();
+  t = Token(stm.str(), Token::NUMBER);
+  return new NumberValue(t);
+}
+Value* Color::green(vector<Value*> arguments) {
+  Color* c = (Color*)arguments[0];
+  ostringstream stm;
+  Token t;
+
+  stm.str("");
+  stm << c->getGreen();
+  t = Token(stm.str(), Token::NUMBER);
+  return new NumberValue(t);
+}
+Value* Color::_alpha(vector<Value*> arguments) {
+  Color* c = (Color*)arguments[0];
+  ostringstream stm;
+  Token t;
+
+  stm.str("");
+  stm << c->getAlpha();
+  t = Token(stm.str(), Token::NUMBER);
+  return new NumberValue(t);
 }

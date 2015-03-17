@@ -162,7 +162,7 @@ pre { .wrap  }
 @base: 5%;
 @filler: @base * 2;
 @other: @base + @filler;
-@width: 10px;
+@width: -1px + 10px;
 @number: 10;
 @emUnits: 5em + unit(@width, em);
 
@@ -172,6 +172,13 @@ pre { .wrap  }
     border: @width * 2 solid black;
     height: 100% / 2 + @filler;
     top: @emUnits;
+
+    @scale: 4;
+    @defaultFontSize: 2;
+    @headerHeight: 75px;
+    
+    transform:rotate(45deg);
+    left:unit(-@defaultFontSize/2.2*@scale, px);
 }
 
 /* Color Functions */
@@ -222,6 +229,9 @@ pre { .wrap  }
     color: orange;
     #bundle .button;
 }
+#header2 a {
+    #bundle > .button;
+}
 
 /* Scope */
 
@@ -267,6 +277,8 @@ body {
     background-image: linear-gradient(bottom, rgb(232,63,25) 0%,
                                       rgb(255,130,95) 50%);
     width: 10-1;
+
+    x: 4 = 1;
     filter:progid:DXImageTransform.Microsoft.gradient(enabled='false',startColorstr=#57ba52,endColorstr=#2c9027,GradientType=0);         
 }
 
@@ -292,6 +304,13 @@ audio:not([controls]) {
 .class1 { .mixin5(#ddd) }
 .class2 { .mixin5(#555) }
 
+.mixin5a (@b, @c) when (@b = string) {
+    width: @c;
+}
+
+.class1a {
+    .mixin5a(string, 10px);
+}
 
 .test (@h) {
     h1{
@@ -328,11 +347,151 @@ body {
     background: url(test.png) no-repeat;
     width: imgwidth(@image);
     height: imgheight(@image);
+    background-color: imgbackground(@image);
 
     @image2: url('test.jpg');
     width-jpg: imgwidth(@image2);
     height-jpg: imgheight(@image2);
+    background-color-jpg: imgbackground(@image2);
 }
+
+@media (width: 400px) {
+    .test6 {
+        width: 400px;
+        color: @nice-blue;
+        .bordered;
+        .border-radius (10px);
+        .test(1px);
+
+        .test7 {
+            width: 100px;
+        }
+    }
+    .test(10px);
+}
+
+@name: "blocked";
+
+.@{name}{
+    color: #000;
+}
+.mixin6(@name2, @color) {
+    .@{name2} {
+        color: @color;
+    }
+}
+.class {
+    .mixin6('blocked', #FFF);
+}
+
+/* Reference a mixin before it is declared. */
+.mixin-test7 {
+    .mixin7(15);
+}
+
+.mixin7(@x){
+    .mixin8(@x);
+}
+.mixin8(@y) {
+    -x-mixin8: @y;
+}
+
+.loop(@counter) when (@counter > 0) {
+  .loop((@counter - 1));    // next iteration
+  width: (10px * @counter); // code for each iteration
+}
+
+div {
+  .loop(5); // launch the loop
+}
+
+.test-nested-loop () {
+    @name: ~"abc";
+    
+    .nested-loop(@name, @counter) when (@counter > 0) {
+        .nested-loop-@{name} {
+            c: @counter;
+        }
+        .nested-loop(~"@{name}-@{counter}", @counter - 1);
+    }
+
+    .nested-loop(@name, 3);
+}
+
+.test-nested-loop();
+
+.test8 {
+    @media screen {
+        width: 300px;
+
+        @media print {
+            color: #000;
+        }
+    }
+}
+
+.test9:extend(.test10) {
+    color: #FFF;
+}
+.test10,
+.test10a{
+    background-color: #000;
+}
+.test10b {
+    background-color: #111;
+}
+.test11 {
+    &:extend(.test10a);
+    width: 100px;
+}
+
+.test11a:extend(.test10, .test10b) {}
+
+
+.test11b:a,
+div.test11b {
+    height: 1px;
+}
+
+.extension11b {
+    &:extend(.test11b all);
+}
+
+.test12 (@c: rgb(1,2,3); @b: 4) {
+    color: @c;
+}
+.mixin12 {
+    .test12();
+}
+
+.test13(@start-color: #555; @end-color: #333; @start-percent: 0%; @end-percent: 100%) {
+    background-image: -webkit-linear-gradient(left, @start-color @start-percent, @end-color @end-percent); 
+}
+.mixin13 {
+    .test13(@end-color: #000, @start-color: #FFF);
+}
+
+.test14 {
+    &:hover {
+        color: #FFF;
+    }
+    p & {
+        color: #123;
+    }
+    &.class > &[checked] {
+        color: #432;
+    }
+}
+
+.test15(@x) {
+    width: @x;
+}
+
+.class15 {
+    .test15(~"1px solid blue");
+}
+
+@import url("http://fonts.googleapis.com/css?family=Ubuntu:400,700,400italic");
 
 /* Multiline comment ending with * at the end of the file */
 /*

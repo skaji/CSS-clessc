@@ -24,7 +24,6 @@
 
 #include "TokenList.h"
 #include <list>
-using namespace std;
 
 /**
  * 
@@ -33,13 +32,8 @@ class Selector: public TokenList {
 public:
   virtual ~Selector();
 
-  void addPrefix(Selector* prefix);
+  void addPrefix(const Selector &prefix);
 
-  /**
-   * Trim whitespace from the front and back of the selector.
-   */
-  void trim();
-  
   /**
    * If the selector contains commas then it is split up into multiple
    * selectors.
@@ -47,8 +41,21 @@ public:
    * For example <code>p .class, a:hover</code> is split up into
    * <code>p .class</code> and <code>a:hover</code>.
    */
-  list<TokenList*>* split();
-  virtual Selector* clone();
+  void split(std::list<Selector> &l) const;
+
+  bool match(const Selector &list) const;
+
+  const_iterator walk(const Selector &list, const_iterator offset) const;
+  const_iterator walk(const const_iterator &list_begin,
+                      const const_iterator &list_end,
+                      const_iterator offset) const;
+
+  const_iterator find(const TokenList &list,
+                      const_iterator offset,
+                      const_iterator limit) const;
+
+  const_iterator findComma(const_iterator offset) const;
+  const_iterator findComma(const_iterator offset, const_iterator limit) const;
 };
 
 #endif

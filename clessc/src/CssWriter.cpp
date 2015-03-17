@@ -21,78 +21,72 @@
 
 #include "CssWriter.h"
 
-CssWriter::CssWriter(ostream* out) {
-  this->out = out;
+CssWriter::CssWriter() {
+  out = NULL;
+}
+
+CssWriter::CssWriter(ostream &out) {
+  this->out = &out;
 }
 
 CssWriter::~CssWriter() {
 }
 
-void CssWriter::writeStylesheet(Stylesheet* s) {
-  vector<AtRule*>* atrules = s->getAtRules();
-  vector<AtRule*>::iterator aIt;
-  vector<Ruleset*>* rulesets = s->getRulesets();
-  vector<Ruleset*>::iterator rIt;
 
-  for (aIt = atrules->begin(); aIt < atrules->end(); aIt++) {
-    writeAtRule(*aIt);
-  }
-  for (rIt = rulesets->begin(); rIt < rulesets->end(); rIt++) {
-    writeRuleset(*rIt);
-  }
-}
-
-void CssWriter::writeAtRule(AtRule* atrule) {
-  TokenList* rule = atrule->getRule();
-  TokenListIterator* it = rule->iterator();
+void CssWriter::writeAtRule(const string &keyword, const TokenList &rule) {
+  TokenList::const_iterator i = rule.begin();
   
-  out->write(atrule->getKeyword()->c_str(),
-             atrule->getKeyword()->size());
+  out->write(keyword.c_str(),
+             keyword.size());
   out->write(" ", 1);
   
-  while (it->hasNext()) {
-    Token* next = it->next();
-    out->write(next->str.c_str(), next->str.size());
+  for(; i != rule.end(); i++) {
+    const Token next = *i;
+    out->write(next.c_str(), next.size());
   }
   out->write(";", 1);
 }
 
-void CssWriter::writeRuleset(Ruleset* ruleset) {
-  TokenList* selector = ruleset->getSelector();
-  TokenListIterator* it;
+void CssWriter::writeRulesetStart(const TokenList &selector) {
+  TokenList::const_iterator i;
   
-  vector<Declaration*>* declarations = ruleset->getDeclarations();
-  vector<Declaration*>::iterator dIt;
-
-  if (declarations->size() == 0)
-    return;
-  
-  if (selector != NULL) {
-    for (it = selector->iterator(); it->hasNext();) {
-      Token* next = it->next();
-      out->write(next->str.c_str(), next->str.size());
-    }
+  for (i = selector.begin(); i != selector.end(); i++) {
+    const Token next = *i;
+    out->write(next.c_str(), next.size());
   }
   out->write("{", 1);
-  for (dIt = declarations->begin(); dIt < declarations->end(); dIt++) {
-    writeDeclaration(*dIt);
-    if (dIt + 1 < declarations->end())
-      out->write(";", 1);
-  }
+}
+
+void CssWriter::writeRulesetEnd() {
   out->write("}", 1);
 }
 
-void CssWriter::writeDeclaration(Declaration* declaration) {
-  TokenList* value = declaration->getValue();
-  TokenListIterator* it = value->iterator();
+void CssWriter::writeDeclaration(const string &property, const TokenList &value) {
+  TokenList::const_iterator i;
     
-  out->write(declaration->getProperty()->c_str(),
-             declaration->getProperty()->size());
+  out->write(property.c_str(), property.size());
   out->write(":", 1);
   
-  while (it->hasNext()) {
-    Token* next = it->next();
-    out->write(next->str.c_str(), next->str.size());
+  for (i = value.begin(); i != value.end(); i++) {
+    const Token next = *i;
+    out->write(next.c_str(), next.size());
   }
 }
 
+void CssWriter::writeDeclarationDeliminator() {
+  out->write(";", 1);
+}
+
+void CssWriter::writeMediaQueryStart(const TokenList &selector) {
+  TokenList::const_iterator i;
+  
+  for (i = selector.begin(); i != selector.end(); i++) {
+    const Token next = *i;
+    out->write(next.c_str(), next.size());
+  }
+  out->write("{", 1);
+}
+
+void CssWriter::writeMediaQueryEnd() {
+  out->write("}", 1);
+}

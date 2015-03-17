@@ -21,9 +21,14 @@
 
 #include "ValueProcessor.h"
 
+#include <config.h>
+#ifdef WITH_LIBGLOG
+#include <glog/logging.h>
+#endif
+
+/*
 #include <sstream>
 #include <iostream>
-
 template <class T>
 inline std::string to_string (const T& t)
 {
@@ -31,364 +36,462 @@ inline std::string to_string (const T& t)
   ss << t;
   return ss.str();
 }
+*/
 
 ValueProcessor::ValueProcessor() {
-  pushScope();
-  
-  functionLibrary = new FunctionLibrary();
   NumberValue::loadFunctions(functionLibrary);
   Color::loadFunctions(functionLibrary);
   StringValue::loadFunctions(functionLibrary);
   UrlValue::loadFunctions(functionLibrary);  
 }
 ValueProcessor::~ValueProcessor() {
-  popScope();
 }
 
-TokenList* ValueProcessor::processValue(TokenList* value) {
+void ValueProcessor::processValue(TokenList &value, const ValueScope &scope) {
   TokenList newvalue;
   Value* v;
-  TokenList* var;
-  TokenList* variable;
+  const TokenList* var;
+  TokenList variable;
+  TokenList::iterator i;
 
-  while (value->size() > 0) {
-    v = processStatement(value);
+  if (!needsProcessing(value)) {
+    // interpolate strings
+    for(i = value.begin(); i != value.end(); i++) {
+      if ((*i).type == Token::STRING)
+        interpolate((*i), scope);
+    }
+    return;
+  }
+
+  while (value.size() > 0) {
+    v = processStatement(value, scope);
 
     // add spaces between values
-    if (v != NULL || value->size() > 0) {
+    if (v != NULL || value.size() > 0) {
       if (newvalue.size() == 0 ||
-          !needsSpace(newvalue.back()) ||
+          !needsSpace(newvalue.back(), false) ||
           (v == NULL &&
-           !needsSpace(value->front()))) {
+           !needsSpace(value.front(), true))) {
         
       } else {
-        newvalue.push(new Token(" ", Token::WHITESPACE));
+        newvalue.push_back(Token(" ", Token::WHITESPACE));
       }
     }
     
     if (v != NULL) {
-      newvalue.push(v->getTokens());
+      newvalue.insert(newvalue.end(),
+                      v->getTokens()->begin(),
+                      v->getTokens()->end());
       delete v;
-    } else if (value->size() > 0) {
-      if (value->front()->type == Token::ATKEYWORD &&
-          (variable = getVariable(value->front()->str)) != NULL) {
-        newvalue.push(variable);
-        delete value->shift();
+    } else if (value.size() > 0) {
+      // variable containing a non-value.
+      if (value.front().type == Token::ATKEYWORD &&
+          (var = scope.getVariable(value.front())) != NULL) {
+        variable = *var;
+        processValue(variable, scope);
         
-      } else if ((var = processDeepVariable(value)) != NULL) {
-        newvalue.push(var);
-        delete var;
-        delete value->shift();
-        delete value->shift();
-          
-      } else 
-        newvalue.push(value->shift());
+        newvalue.insert(newvalue.end(), variable.begin(), variable.end());
+        value.pop_front();
+        
+      } else if ((var = processDeepVariable(value, scope)) != NULL) {
+        variable = *var;
+        processValue(variable, scope);
+
+        newvalue.insert(newvalue.end(), variable.begin(), variable.end());
+        value.pop_front();
+        value.pop_front();
+
+      } else if (value.size() > 2 &&
+                 value.front().type == Token::IDENTIFIER) {
+
+        newvalue.push_back(value.front());
+        value.pop_front();
+        
+        if (value.front().type == Token::PAREN_OPEN) {
+          newvalue.push_back(value.front());
+          value.pop_front();
+        }
+      } else {
+        newvalue.push_back(value.front());
+        value.pop_front();
+      }
     }
   }
-  value->push(&newvalue);
-  return value;
+  value.swap(newvalue);
+  return;
 }
-bool ValueProcessor::validateValue(TokenList* value) {
-  Value* v = processStatement(value);
-  Value* trueVal = new BooleanValue(true);
+
+bool ValueProcessor::needsProcessing(const TokenList &value) {
+  TokenList::const_iterator i;
+  const Token* t;
+  string operators("+-*/");
+  
+  for(i = value.begin(); i != value.end(); i++) {
+
+      // variable
+    if ((*i).type == Token::ATKEYWORD ||
+        // url
+        (*i).type == Token::URL ||
+        // operator
+        operators.find(*i) != string::npos) {
+      return true;
+
+    } else if (i != value.end()) {
+      // function
+      if ((*i).type == Token::IDENTIFIER) {
+        t = &(*i);
+        if ((*++i).type == Token::PAREN_OPEN &&
+            functionExists(*t)) {
+          return true;
+        } else
+          i--;
+        
+      } else if (*i == "~") {
+        if ((*++i).type == Token::STRING)
+          return true;
+        else
+          i--;
+      }
+    }
+  }
+  
+  return false;
+}
+
+bool ValueProcessor::validateCondition(TokenList &value, const ValueScope &scope) {
+  bool ret = validateValue(value, scope);
+
+  value.ltrim();
+  
+  while(ret == true &&
+        !value.empty() &&
+        value.front() == "and") {
+    value.pop_front();
+    value.ltrim();
+    ret = validateValue(value, scope);
+    value.ltrim();
+  }
+  
+  return ret;
+}
+bool ValueProcessor::validateValue(TokenList &value, const ValueScope &scope) {
+  Value* v = processStatement(value, scope);
+  const BooleanValue trueVal(true);
   Value* v2;
   bool ret;
+
+  if (v == NULL) {
+    throw new ParseException(value.front(),
+                             "condition", 0, 0, "");
+  }
+  
   v2 = v->equals(trueVal);
   ret = ((BooleanValue*)v2)->getValue();
-  
-  delete trueVal;
+
   delete v;
   delete v2;
   
   return ret;
 }
 
-void ValueProcessor::putVariable(string key, TokenList* value) {
-  map<string, TokenList*>* scope = scopes.back();
-  map<string, TokenList*>::iterator mit;
-  
-  // check if variable is alread declared
-  mit = scope->find(key);
-  if (mit != scope->end()) {
-    cerr << "Warning: Variable " << key << " defined twice in same scope." << endl;
-  }
-  scope->insert(pair<string, TokenList*>(key, value));
-}
-TokenList* ValueProcessor::getVariable(string key) {
-  list<map<string, TokenList*>*>::reverse_iterator it;
-  map<string, TokenList*>::iterator mit;
-  
-  for (it = scopes.rbegin(); it != scopes.rend(); it++) {
-    mit = (*it)->find(key);
-    if (mit != (*it)->end()) 
-      return mit->second;
-  }
-  
-  return NULL;
-}
 
-void ValueProcessor::pushScope() {
-  scopes.push_back(new map<string, TokenList*>());
-}
-void ValueProcessor::popScope() {
-  // delete tokenlists in scope
-  delete scopes.back();
-  scopes.pop_back();
-}
+Value* ValueProcessor::processStatement(TokenList &value, const ValueScope& scope) {
+  Value* op, *v;
 
-
-Value* ValueProcessor::processStatement(TokenList* value) {
-  Value* op, *v = processConstant(value);
+  value.ltrim();
+  v = processConstant(value, scope);
   
   if (v != NULL) {
-    while ((op = processOperator(value, v)) != NULL)
-      v = op;
+    value.ltrim();
+
+    while ((op = processOperator(value, *v, scope)) != NULL) {
+      if (v != op) {
+        delete v;
+        v = op;        
+      }
+      value.ltrim();
+    }
     
     return v;
   } else
     return NULL;
 }
 
-Value* ValueProcessor::processOperator(TokenList* value, Value* v1,
-                                       Token* lastop) {
-  Value* v2, *tmp;
-  Token* op;
-  string operators("+-*/=><");
+Value* ValueProcessor::processOperator(TokenList &value, const Value &operand1,
+                                       const ValueScope &scope, Token* lastop) {
+  const Value* operand2;
+  Value* result;
+  Token op;
+  std::string operators("+-*/=><");
   size_t pos;
   
-  while (value->size() > 0 &&
-         value->front()->type == Token::WHITESPACE) {
-    delete value->shift();
-  }
-  if (value->size() == 0 ||
-      (pos = operators.find(value->front()->str)) == string::npos)
+  if (value.size() == 0 ||
+      (pos = operators.find(value.front())) == string::npos)
     return NULL;
-  
-  
+
   if (lastop != NULL &&
-      operators.find(lastop->str) >= pos) {
+      operators.find(*lastop) >= pos) {
     return NULL;
   }
-  op = value->shift();
+  op = value.front();
+  value.pop_front();
+
+  // if a minus is not followed by a space we have to consider it
+  // part of a negative consonant.
+  if (op == "-" && value.front().type != Token::WHITESPACE) {
+    value.push_front(op);
+    return NULL;
+  }
 
   // Check for 2 char operators ('>=' and '=<')
-  if (value->size() > 0 &&
-      (pos = operators.find(value->front()->str)) != string::npos) {
-    op->str.append(value->front()->str);
-    delete value->shift();
+  if (value.size() > 0 &&
+      (pos = operators.find(value.front())) != string::npos) {
+    op.append(value.front());
+    value.pop_front();
   }
+
+  value.ltrim();
   
-  v2 = processConstant(value);
-  if (v2 == NULL) {
-    if (value->size() > 0) 
-      throw new ParseException(value->front()->str, "Constant or @-variable");
+  operand2 = processConstant(value, scope);
+  if (operand2 == NULL) {
+    if (value.size() > 0) 
+      throw new ParseException(value.front(),
+                               "Constant or @-variable", 0, 0, "");
     else
-      throw new ParseException("end of line", "Constant or @-variable");
+      throw new ParseException("end of line",
+                               "Constant or @-variable", 0, 0, "");
   }
-  while ((tmp = processOperator(value, v2, op))) 
-    v2 = tmp;
+
+  value.ltrim();
   
-  if (op->str == "+") 
-    tmp = v1->add(v2);
-  else if (op->str == "-")
-    tmp = v1->substract(v2);
-  else if (op->str == "*")
-    tmp = v1->multiply(v2);
-  else if (op->str == "/")
-    tmp = v1->divide(v2);
-  else if (op->str == "=")
-    tmp = v1->equals(v2);
-  else if (op->str == "<")
-    tmp = v1->lessThan(v2);
-  else if (op->str == ">")
-    tmp = v1->greaterThan(v2);
-  else if (op->str == "=<")
-    tmp = v1->lessThanEquals(v2);
-  else if (op->str == ">=") 
-    tmp = v1->greaterThanEquals(v2);
+  while ((result = processOperator(value, *operand2, scope, &op))) {
+    delete operand2;
+    operand2 = result;
+    
+    value.ltrim();
+  }
+
+#ifdef WITH_LIBGLOG
+  VLOG(3) << "Operation: " << operand1.getTokens()->toString() << 
+    "(" << Value::typeToString(operand1.type) <<  ") " << op << " " <<
+    operand2->getTokens()->toString() << "(" <<
+    Value::typeToString(operand2->type) << ")";
+#endif
   
-  if (tmp != v1)
-    delete v1;
-  if (tmp != v2)
-    delete v2;
-  return tmp;
+  if (op == "+") 
+    result = operand1.add(*operand2);
+  else if (op == "-")
+    result = operand1.substract(*operand2);
+  else if (op == "*")
+    result = operand1.multiply(*operand2);
+  else if (op == "/")
+    result = operand1.divide(*operand2);
+  else if (op == "=")
+    result = operand1.equals(*operand2);
+  else if (op == "<")
+    result = operand1.lessThan(*operand2);
+  else if (op == ">")
+    result = operand1.greaterThan(*operand2);
+  else if (op == "=<")
+    result = operand1.lessThanEquals(*operand2);
+  else if (op == ">=") 
+    result = operand1.greaterThanEquals(*operand2);
+  
+  delete operand2;
+  return result;
 }
-Value* ValueProcessor::processConstant(TokenList* value) {
-  Token* token;
+Value* ValueProcessor::processConstant(TokenList &value, const ValueScope &scope) {
+  Token token;
   Value* ret;
-  TokenList* variable;
-
-  while (value->size() > 0 &&
-         value->front()->type == Token::WHITESPACE) {
-    delete value->shift();
-  }
-
-  if (value->size() == 0)
+  const TokenList* var;
+  TokenList variable;
+  bool hasQuotes;
+  std::string str;
+  
+  if (value.size() == 0)
     return NULL;
   
-  token = value->front();
-  switch(token->type) {
+  token = value.front();
+  
+#ifdef WITH_LIBGLOG
+  VLOG(3) << "Constant: " << token;
+#endif
+  
+  switch(token.type) {
   case Token::HASH:
+    value.pop_front();
     // generate color from hex value
-    return new Color(value->shift());
+    return new Color(token);
+    
   case Token::NUMBER:
   case Token::PERCENTAGE:
   case Token::DIMENSION:
-    return new NumberValue(value->shift());
+    value.pop_front();
+    return new NumberValue(token);
 
   case Token::ATKEYWORD:
-    if ((variable = getVariable(token->str)) != NULL) {
-      variable = variable->clone();
-      ret = processStatement(variable);
+    if ((var = scope.getVariable(token)) != NULL) {
+      variable = *var;
+
+      ret = processStatement(variable, scope);
       
-      while(!variable->empty() &&
-            variable->front()->type == Token::WHITESPACE)
-        delete variable->shift();
-      
-      if (!variable->empty()) {
-        delete ret;
-        ret = NULL;
-      } else 
-        delete value->shift();
-      
-      delete variable;
-      return ret;
-    } else
-      return NULL;
+      if (ret != NULL && variable.empty()) {
+        value.pop_front();
+        return ret;
+      }
+    } 
+    return NULL;
 
   case Token::STRING:
-    processString(token);
-    token->str = removeQuotes(token->str);
-    return new StringValue(value->shift(), true);
+    value.pop_front();
+    hasQuotes = token.stringHasQuotes();
+    interpolate(token, scope);
+    token.removeQuotes();
+    return new StringValue(token, hasQuotes);
 
   case Token::URL:
-    processString(token);
-    return new UrlValue(token,
-                        removeQuotes(getUrlString(value->shift()->str)));
+    value.pop_front();
+    interpolate(token, scope);
+    str = token.getUrlString();
+    return new UrlValue(token, str);
         
   case Token::IDENTIFIER:
+    value.pop_front();
+    
+    if (value.size() > 1 &&
+        value.front().type == Token::PAREN_OPEN) {
 
-    if (value->size() > 2 &&
-        value->at(1)->type == Token::PAREN_OPEN &&
-        functionExists(token->str)) {
-      value->shift();
-      delete value->shift();
+      if (functionExists(token)) {
+        value.pop_front();
       
-      ret = processFunction(token->str, value);
-      delete token;
-      return ret;
+        return processFunction(token, value, scope);
+      } else {
+        value.push_front(token);
+        return NULL;
+      }
       
     } else if ((ret = processUnit(token)) != NULL) {
-      value->shift();
       return ret;  
-    } else if (token->str.compare("true") == 0) {
-      delete value->shift();
+    } else if (token.compare("true") == 0) {
       return new BooleanValue(true);
-    } else
-      return NULL;
+    } else  
+      return new StringValue(token, false);
     
   case Token::PAREN_OPEN:
-    value->shift();
-    ret = processStatement(value);
+    value.pop_front();
+    ret = processStatement(value, scope);
 
-    while (value->size() > 0 &&
-           value->front()->type == Token::WHITESPACE) {
-      delete value->shift();
-    }
-
-    if (value->size() == 0)
-      throw new ParseException("end of line", ")");
+    value.ltrim();
+    
+    if (value.size() == 0)
+      throw new ParseException("end of line", ")", 0, 0, "");
 
     if (ret != NULL) {
-      if (value->front()->type == Token::PAREN_CLOSED) {
-        delete value->shift();
-        delete token;
+      if (value.front().type == Token::PAREN_CLOSED) {
+        value.pop_front();
         return ret;
       } else {
-        value->unshift(ret->getTokens());
+        value.insert(value.begin(),
+                     ret->getTokens()->begin(),
+                     ret->getTokens()->end());
         delete ret;
       }
     }
-    value->unshift(token);
+    value.push_front(token);
     return NULL;
     
   default:
     break;
   }
 
-  if ((variable = processDeepVariable(value)) != NULL) {
-    ret = processStatement(variable);
+  if ((var = processDeepVariable(value, scope)) != NULL) {
+    variable = *var;
+    ret = processStatement(variable, scope);
     if (ret != NULL) {
-      delete value->shift();
-      delete value->shift();
+      value.pop_front();
+      value.pop_front();
     }
-    delete variable;
     return ret;
 
-  } else if(token->str.compare("%") == 0 &&
-            value->size() > 2 &&
-            value->at(1)->type == Token::PAREN_OPEN) {
-    delete value->shift();
-    delete value->shift();
-    return processFunction("%", value);
+  } else if(token == "%" &&
+            value.size() > 2) {
+    value.pop_front();
+    if (value.front().type == Token::PAREN_OPEN) {
+      value.pop_front();
+      return processFunction("%", value, scope);
       
-  } else if ((ret = processEscape(value)) != NULL) {
+    } else {
+      value.push_front(token);
+      return NULL;
+    }
+  } else if ((ret = processEscape(value, scope)) != NULL) {
+    return ret;
+  } else if ((ret = processNegative(value, scope)) != NULL) {
     return ret;
   }
   return NULL;
 }
 
-TokenList* ValueProcessor::processDeepVariable (TokenList* value) {
-  Token* first, *second;
-  TokenList* var;
+const TokenList* ValueProcessor::processDeepVariable (TokenList &value,
+                                                const ValueScope &scope) {
+  TokenList::iterator i = value.begin();
+  const TokenList* var;
+  TokenList variable;
   string key = "@";
   
-  if (value->size() < 2) 
+  if (value.size() < 2) 
     return NULL;
   
-  first = value->front();
-  second = value->at(1);
+  if ((*i).type != Token::OTHER ||
+      (*i) != "@")
+    return NULL;
+
+  i++;
   
-  if (first->type != Token::OTHER ||
-      first->str != "@" ||
-      second->type != Token::ATKEYWORD ||
-      (var = getVariable(second->str)) == NULL)
+  if ((*i).type != Token::ATKEYWORD ||
+      (var = scope.getVariable((*i))) == NULL) 
     return NULL;
 
-  if (var->size() > 1 || var->front()->type != Token::STRING)
+  variable = *var;
+  processValue(variable, scope);
+  
+  if (variable.size() != 1 || variable.front().type != Token::STRING)
     return NULL;
-
+  
   // generate key with '@' + var without quotes
-  key.append(var->front()->
-             str.substr(1, var->front()->str.size() - 2));
-
-  var = getVariable(key);
-  if (var == NULL)
-    return NULL;
-
-  return var->clone();
+  variable.front().removeQuotes();
+  key.append(variable.front());
+  
+  return scope.getVariable(key);
 }
 
-bool ValueProcessor::functionExists(string function) {
-  return (functionLibrary->getFunction(function.c_str()) != NULL);
+bool ValueProcessor::functionExists(const std::string &function) {
+  
+  return (functionLibrary.getFunction(function.c_str()) != NULL);
 }
 
-Value* ValueProcessor::processFunction(string function, TokenList* value) {
+Value* ValueProcessor::processFunction(const std::string &function,
+                                       TokenList &value,
+                                       const ValueScope &scope) {
   string percentage;
   vector<Value*> arguments;
   FuncInfo* fi;
   Value* ret;
   vector<Value*>::iterator it;
   string arg_str;
+
+#ifdef WITH_LIBGLOG
+  VLOG(3) << "Function: " << function;
+#endif
   
-  fi = functionLibrary->getFunction(function.c_str());
+  fi = functionLibrary.getFunction(function.c_str());
   
   if (fi == NULL)
     return NULL;
 
-  arguments = processArguments(value);
+  arguments = processArguments(value, scope);
 
-  if (functionLibrary->checkArguments(fi, arguments)) {
+  if (functionLibrary.checkArguments(fi, arguments)) {
     ret = fi->func(arguments);
   } else {
     arg_str.append(function);
@@ -396,14 +499,14 @@ Value* ValueProcessor::processFunction(string function, TokenList* value) {
     for (it = arguments.begin(); it != arguments.end(); it++) {
       if (it != arguments.begin())
         arg_str.append(", ");
-      arg_str.append((*it)->getTokens()->toString()->c_str());
+      arg_str.append((*it)->getTokens()->toString().c_str());
     }
     arg_str.append(")");
     
     throw new ParseException(arg_str,
-                             functionLibrary->
-                             functionDefToString(function.c_str(),
-                                                 fi));
+                             functionLibrary.
+                             functionDefToString(function.c_str(),fi),
+                             0,0, "");
   }
   
   // delete arguments
@@ -415,125 +518,183 @@ Value* ValueProcessor::processFunction(string function, TokenList* value) {
   return ret;
 }
 
-vector<Value*> ValueProcessor::processArguments (TokenList* value) {
+vector<Value*> ValueProcessor::processArguments (TokenList &value,
+                                                 const ValueScope &scope) {
   vector<Value*> arguments;
   Value* argument;
 
-  if (value->size() == 0) 
-    throw new ParseException("end of value", ")");
+  if (value.size() == 0) 
+    throw new ParseException("end of value", ")", 0, 0, "");
   
-  if (value->front()->type != Token::PAREN_CLOSED)  {
-    argument = processStatement(value);
+  if (value.front().type != Token::PAREN_CLOSED)  {
+    argument = processStatement(value, scope);
     if (argument != NULL)
       arguments.push_back(argument);
-    else
-      arguments.push_back(new StringValue(value->shift(), false));
+    else {
+      arguments.push_back(new StringValue(value.front(), false));
+      value.pop_front();
+    }
   }
   
-  while (value->size() > 0 &&
-         (value->front()->str == "," ||
-          value->front()->str == ";")) {
-    delete value->shift();
-    
-    argument = processStatement(value);
+  while (value.size() > 0 &&
+         (value.front() == "," ||
+          value.front() == ";")) {
+    value.pop_front();
+
+    argument = processStatement(value, scope);
 
     if (argument != NULL) {
       arguments.push_back(argument);
-    } else if (value->front()->type != Token::PAREN_CLOSED) {
-      arguments.push_back(new StringValue(value->shift(), false));      
+    } else if (value.front().type != Token::PAREN_CLOSED) {
+      arguments.push_back(new StringValue(value.front(), false));      
+      value.pop_front();
     }
   }
 
-  if (value->size() == 0) 
-    throw new ParseException("end of value", ")");
+  if (value.size() == 0) 
+    throw new ParseException("end of value", ")", 0, 0, "");
   
-  if (value->front()->type != Token::PAREN_CLOSED) 
-    throw new ParseException(value->front()->str, ")");
+  if (value.front().type != Token::PAREN_CLOSED) 
+    throw new ParseException(value.front(), ")", 0, 0, "");
     
-  delete value->shift();
+  value.pop_front();
 
   return arguments;
 }
 
-void ValueProcessor::processString(Token* token) {
-  size_t start, end;
-  string key = "@", value;
-  TokenList* var;
-  
-  if ((start = token->str.find("@{")) == string::npos ||
-      (end = token->str.find("}", start)) == string::npos)
-    return;
-  
-  key.append(token->str.substr(start + 2, end - (start + 2)));
-  var = getVariable(key);
-  if (var == NULL)
-    return;
 
-  value = *var->toString();
-
-  // Remove quotes off strings.
-  if (var->size() == 1 && var->front()->type == Token::STRING) 
-    value = value.substr(1, value.size() - 2);
+Value* ValueProcessor::processEscape (TokenList &value, const ValueScope &scope) {
+  Token t;
   
-  token->str.replace(start, (end + 1) - start, value);
-}
-
-Value* ValueProcessor::processEscape (TokenList* value) {
-  if (value->size() < 2 ||
-      value->front()->str != "~" ||
-      value->at(1)->type != Token::STRING) 
+  if (value.size() < 2 ||
+      value.front() != "~")
     return NULL;
 
-  delete value->shift();
-  processString(value->front());
-  value->front()->str = removeQuotes(value->front()->str);
-  return new StringValue(value->shift(), false);
-}
+  t = value.front();
+  value.pop_front();
 
-string ValueProcessor::removeQuotes(string str) {
-  str = str.substr(1, str.size() - 2);
-  string::iterator i;
-  string ret;
-  
-  for (i = str.begin(); i != str.end(); i++) {
-    if (*i == '\\') 
-      i++;
-    ret.push_back(*i);
+  if (value.front().type != Token::STRING) {
+    value.push_front(t);
+    return NULL;
   }
-  return ret;
+
+  t = value.front();
+  value.pop_front();
+  interpolate(t, scope);
+  t.removeQuotes();
+  return new StringValue(t, false);
 }
 
-string ValueProcessor::getUrlString(string url) {
-  return url.substr(4, url.length() - 5);
-}
-
-UnitValue* ValueProcessor::processUnit(Token* t) {
+UnitValue* ValueProcessor::processUnit(Token &t) {
   // em,ex,px,ch,in,mm,cm,pt,pc,ms
   string units("emexpxchinmmcmptpcms");
   size_t pos;
-  if (t->str.size() == 2 &&
-      (pos = units.find(t->str)) != string::npos &&
+  if (t.size() == 2 &&
+      (pos = units.find(t)) != string::npos &&
       pos % 2 == 0) {
     return new UnitValue(t);
-  } else if(t->str.compare("m") == 0 ||
-            t->str.compare("s") == 0 ||
-            t->str.compare("rad") == 0 ||
-            t->str.compare("deg") == 0 ||
-            t->str.compare("grad") == 0 ||
-            t->str.compare("turn") == 0) {
+  } else if(t.compare("m") == 0 ||
+            t.compare("s") == 0 ||
+            t.compare("rad") == 0 ||
+            t.compare("deg") == 0 ||
+            t.compare("grad") == 0 ||
+            t.compare("turn") == 0) {
     return new UnitValue(t);
   } else
     return NULL;
 }
 
-bool ValueProcessor::needsSpace(Token* t) {
-  if (t->type == Token::OTHER &&
-      t->str.size() == 1 &&
-      string(",:=.").find(t->str.at(0)) != string::npos) {
+bool ValueProcessor::needsSpace(const Token &t, bool before) {
+  if (t.type == Token::OTHER &&
+      t.size() == 1 &&
+      string(":=.").find(t[0]) != string::npos) {
     return false;
   }
-  if (t->type == Token::COLON)
+  if (before && t.type == Token::COLON)
     return false;
-  return !(t->type == Token::PAREN_OPEN ||
-           t->type == Token::PAREN_CLOSED);
+  if (!before && t.type == Token::PAREN_OPEN)
+    return false;
+  if (before && t.type == Token::PAREN_CLOSED)
+    return false;
+  if (before && t == ",")
+    return false;
+  return true;
 }
+
+Value* ValueProcessor::processNegative(TokenList &value,
+                                             const ValueScope &scope) {
+  Token minus;
+  Value* constant;
+  Value *zero, *ret;
+  Token t_zero("0", Token::NUMBER);
+    
+  if (value.front() != "-")
+    return NULL;
+  
+  minus = value.front();
+  value.pop_front();
+  
+  value.ltrim();
+  constant = processConstant(value, scope);
+  if (constant == NULL) {
+    value.push_front(minus);
+    return NULL;
+  }
+#ifdef WITH_LIBGLOG
+  VLOG(3) << "Negate: " << constant->getTokens()->toString();
+#endif
+
+  zero = new NumberValue(t_zero);
+  ret = zero->substract(*constant);
+
+  delete constant;
+  delete zero;
+  
+  return ret;
+}
+
+void ValueProcessor::interpolate(std::string &str, const ValueScope &scope) {
+  size_t start, end = 0;
+  string key , value;
+  const TokenList* var;
+  TokenList variable;
+  
+  while ((start = str.find("@{", end)) != string::npos &&
+         (end = str.find("}", start)) != string::npos) {
+    key = "@";
+    key.append(str.substr(start + 2, end - (start + 2)));
+
+#ifdef WITH_LIBGLOG
+    VLOG(3) << "Key: " << key;
+#endif
+    
+    var = scope.getVariable(key);
+    
+    if (var != NULL) {
+      variable = *var;
+
+      processValue(variable, scope);
+
+      // Remove quotes off strings.
+      if (variable.size() == 1 &&
+          variable.front().type == Token::STRING) {
+        variable.front().removeQuotes();
+      }
+
+      value = variable.toString();
+      
+      str.replace(start, (end + 1) - start, value);
+      end = start + value.length();
+    }
+  }
+}
+
+void ValueProcessor::interpolate(TokenList &tokens,
+                                 const ValueScope &scope) {
+  TokenList::iterator i;
+  
+  for (i = tokens.begin(); i != tokens.end(); i++) {
+    interpolate((*i), scope);
+  }
+}
+

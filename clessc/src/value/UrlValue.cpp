@@ -30,6 +30,7 @@
 #ifdef WITH_LIBJPEG
 #include <jpeglib.h>
 #include <setjmp.h>
+#include <stdio.h>
 
 struct urlvalue_jpeg_error_mgr {
   struct jpeg_error_mgr pub;	/* "public" fields */
@@ -55,8 +56,8 @@ urlvalue_jpeg_error_exit (j_common_ptr cinfo)
 
 #endif
 
-UrlValue::UrlValue(Token* token, string path): Value() {
-  tokens.push(token);
+UrlValue::UrlValue(Token &token, std::string &path): Value() {
+  tokens.push_back(token);
   this->path = path;
   type = Value::URL;
   loaded = false;
@@ -66,27 +67,44 @@ UrlValue::UrlValue(Token* token, string path): Value() {
 UrlValue::~UrlValue() {
 }
 
-Value* UrlValue::add(Value* v) {
-  (void)v;
-  throw new ValueException("You can not add images.");
+std::string UrlValue::getPath() const {
+  return path;
 }
-Value* UrlValue::substract(Value* v) {
+
+Value* UrlValue::add(const Value &v) const {
   (void)v;
-  throw new ValueException("You can not substract images.");
+  throw new ValueException("You can not add urls.");
 }
-Value* UrlValue::multiply(Value* v) {
+Value* UrlValue::substract(const Value &v) const {
   (void)v;
-  throw new ValueException("You can not multiply images.");
+  throw new ValueException("You can not substract urls.");
 }
-Value* UrlValue::divide(Value* v) {
+Value* UrlValue::multiply(const Value &v) const {
   (void)v;
-  throw new ValueException("You can not divide images.");
+  throw new ValueException("You can not multiply urls.");
 }
-int UrlValue::compare(Value* v) {
-  if (v->type == URL) {
-    return 0;
+Value* UrlValue::divide(const Value &v) const {
+  (void)v;
+  throw new ValueException("You can not divide urls.");
+}
+
+BooleanValue* UrlValue::lessThan(const Value &v) const {
+  const UrlValue* u;
+  if (v.type == URL) {
+    u = static_cast<const UrlValue*>(&v);
+    return new BooleanValue(path < u->getPath());
   } else {
-    throw new ValueException("You can only compare images with images.");
+    throw new ValueException("You can only compare urls with urls.");
+  }
+}
+BooleanValue* UrlValue::equals(const Value &v) const {
+  const UrlValue* u;
+  
+  if (v.type == URL) {
+    u = static_cast<const UrlValue*>(&v);
+    return new BooleanValue(path == u->getPath());
+  } else {
+    throw new ValueException("You can only compare urls with urls.");
   }
 }
 
@@ -106,7 +124,10 @@ bool UrlValue::loadPng() {
   
   png_structp png_ptr;
   png_infop info_ptr;
-
+  png_bytep* row_pointers;
+  png_uint_32 rowbytes;
+  int y;
+    
   FILE *fp = fopen(path.c_str(), "rb");
   if (!fp)
     return false; //"Image file could not be opened"
@@ -135,7 +156,51 @@ bool UrlValue::loadPng() {
 
   width = png_get_image_width(png_ptr, info_ptr);
   height = png_get_image_height(png_ptr, info_ptr);
+  int channels = png_get_channels(png_ptr, info_ptr);
+  
+  if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE) {
+    png_set_palette_to_rgb(png_ptr);
+    channels = 3;
+  }
+  if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
+    png_set_tRNS_to_alpha(png_ptr);
+    channels += 1;
+  }
 
+  /* read file */
+  if (setjmp(png_jmpbuf(png_ptr)))
+    throw new ValueException("Error during read_image");
+
+  rowbytes = png_get_rowbytes(png_ptr,info_ptr);
+  
+  row_pointers = (png_bytep*)malloc(sizeof(png_bytep) * height);
+
+  for (y = 0; y < height; y++)
+    row_pointers[y] = (png_byte*)malloc(rowbytes);
+
+  png_read_image(png_ptr, row_pointers);
+
+  if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB ||
+      png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA ||
+      png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE) {
+
+    png_byte* color1 = row_pointers[0];
+    png_byte* color2 = row_pointers[0] + (width - 1) * channels;
+    png_byte* color3 = row_pointers[height - 1];
+    png_byte* color4 = row_pointers[height - 1] + (width - 1) * channels;
+
+    if (memcmp(color1, color2, channels) == 0 &&
+        memcmp(color1, color3, channels) == 0 &&
+        memcmp(color1, color4, channels) == 0) {
+        
+      background.setRGB(color1[0], color1[1], color1[2]);
+      if (channels == 4)
+        background.setAlpha(color1[3]);
+    } else {
+      background.setRGB(0,0,0);
+    }
+  }
+    
   fclose(fp);
   return true;
   
@@ -234,6 +299,23 @@ bool UrlValue::loadJpeg() {
     (void) jpeg_read_scanlines(&cinfo, buffer, 1);
     /* Assume put_scanline_someplace wants a pointer and sample count. */
     //put_scanline_someplace(buffer[0], row_stride);
+    if (cinfo.out_color_space == JCS_RGB && 
+        (cinfo.output_scanline == 1 ||
+         cinfo.output_scanline == cinfo.output_height)) {
+
+      if (cinfo.output_scanline == 1) {
+        background.setRGB(buffer[0][0], buffer[0][1], buffer[0][2]);
+      }
+      if (background.getRed() != buffer[0][0] ||
+          background.getGreen() != buffer[0][1] ||
+          background.getBlue() != buffer[0][2] ||
+
+          background.getRed() != buffer[0][row_stride - cinfo.output_components] ||
+          background.getGreen() != buffer[0][row_stride - cinfo.output_components + 1] ||
+          background.getBlue() != buffer[0][row_stride - cinfo.output_components + 2]) {
+        background.setRGB(0,0,0);
+      }
+    }
   }
 
   /* Step 7: Finish decompression */
@@ -267,22 +349,42 @@ unsigned int UrlValue::getImageHeight() {
   return (loadImg() ? height : 0);
 }
 
-void UrlValue::loadFunctions(FunctionLibrary* lib) {
-  lib->push("imgheight", "R", &UrlValue::imgheight);
-  lib->push("imgwidth", "R", &UrlValue::imgwidth);
+Color& UrlValue::getImageBackground() {
+  loadImg();
+  return background;
+}
+
+
+void UrlValue::loadFunctions(FunctionLibrary &lib) {
+  lib.push("imgheight", "R", &UrlValue::imgheight);
+  lib.push("imgwidth", "R", &UrlValue::imgwidth);
+  lib.push("imgbackground", "R", &UrlValue::imgbackground);
 }
 
 
 Value* UrlValue::imgheight(vector<Value*> arguments) {
-  NumberValue* val = new NumberValue(new Token("1", Token::NUMBER));
-  val->setValue(((UrlValue*)arguments[0])->getImageHeight());
+  UrlValue* u;
+  Token t("1", Token::NUMBER);
+  NumberValue* val = new NumberValue(t);
+
+  u = static_cast<UrlValue*>(arguments[0]);
+  val->setValue(u->getImageHeight());
   val->setUnit("px");
   return val;
 }
 Value* UrlValue::imgwidth(vector<Value*> arguments) {
-  NumberValue* val = new NumberValue(new Token("1", Token::NUMBER));
-  
+  UrlValue* u;
+  Token t("1", Token::NUMBER);
+  NumberValue* val = new NumberValue(t);
+
+  u = static_cast<UrlValue*>(arguments[0]);
   val->setUnit("px");
-  val->setValue((double)((UrlValue*)arguments[0])->getImageWidth());
+  val->setValue(u->getImageWidth());
   return val;
+}
+ 
+Value* UrlValue::imgbackground(vector<Value*> arguments) {
+  UrlValue* u = static_cast<UrlValue*>(arguments[0]);
+  Color& color = u->getImageBackground();
+  return new Color(color.getRed(), color.getGreen(), color.getBlue());
 }

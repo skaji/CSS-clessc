@@ -23,40 +23,48 @@
 #define __UrlValue_h__
 
 #include "Value.h"
-
-using namespace std;
+#include "Color.h"
+#include <string>
 
 class UrlValue: public Value {
 private:
 
-  string path;
-  
+  std::string path;
+
+  // image resources
   bool loaded;
   int width;
   int height;
+  Color background;
   
   bool loadImg();
   bool loadPng();
   bool loadJpeg();
 
 public:
-  UrlValue(Token* token, string path);
+  UrlValue(Token &token, std::string &path);
 
   virtual ~UrlValue();
+
+  std::string getPath() const;
   
-  virtual Value* add(Value* v);
-  virtual Value* substract(Value* v);
-  virtual Value* multiply(Value* v);
-  virtual Value* divide(Value* v);
-  virtual int compare(Value* v);
+  virtual Value* add(const Value &v) const;
+  virtual Value* substract(const Value &v) const;
+  virtual Value* multiply(const Value &v) const;
+  virtual Value* divide(const Value &v) const;
+
+  virtual BooleanValue* lessThan(const Value &v) const;
+  virtual BooleanValue* equals(const Value &v) const;
 
   unsigned int getImageWidth();
   unsigned int getImageHeight();
+  Color& getImageBackground();
 
-  static void loadFunctions(FunctionLibrary* lib);
+  static void loadFunctions(FunctionLibrary &lib);
 
   static Value* imgheight(vector<Value*> arguments);
   static Value* imgwidth(vector<Value*> arguments);
+  static Value* imgbackground(vector<Value*> arguments);
 };
   
 #endif

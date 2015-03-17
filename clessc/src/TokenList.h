@@ -24,60 +24,32 @@
 
 #include "Token.h"
 #include <list>
-using namespace std;
 
-class TokenListIterator {
-private:
-  list<Token*>::iterator it, begin, end;
-  
-public:
-  TokenListIterator(list<Token*>::iterator begin,
-                    list<Token*>::iterator end);
-  void toEnd ();
-  Token* previous ();
-  Token* next ();
-  Token* peek ();
-  Token* current ();
-  bool hasNext ();
-  bool hasPrevious ();
-};
-
-class TokenList {
-private:
-  list<Token*> tokens;
+class TokenList: public std::list<Token> {
   
 public:
   virtual ~TokenList();
   
-  void push (Token* token);
-  Token* pop ();
-
-  void unshift (Token* token);
-  Token* shift ();
-
-  bool empty ();
-  size_t size();
-
-  bool equals(TokenList* list);
-
-  Token* back();
-  Token* front();
-  Token* at(unsigned int i);
-
-  TokenListIterator* iterator();
-  TokenListIterator* reverseIterator ();
-
-  void push(TokenList* list);
-  void unshift(TokenList* list);
 
   /**
-   * Delete all tokens in the list and remove them from the list.
+   * Trim whitespace tokens from the front of the selector.
    */
-  void clear();
+  void ltrim();
 
-  virtual TokenList* clone();
+  /**
+   * Trim whitespace tokens from the back of the selector.
+   */
+  void rtrim();
+
+  /**
+   * Trim whitespace tokens from the front and back of the selector.
+   */
+  void trim();
   
-  string* toString();
+  std::string toString() const;
+
+  bool contains(const Token &t) const;
+  bool contains(Token::Type t, const std::string &str) const;
 };
 
 #endif

@@ -21,33 +21,81 @@
 
 #include "CssPrettyWriter.h"
 
+void CssPrettyWriter::indent() {
+  int i;
+  if (indent_size == 0)
+    return;
+  for (i = 0; i < indent_size; i++)
+    out->write("  ", 2);
+}
 
-void CssPrettyWriter::writeAtRule(AtRule* atrule) {
-  CssWriter::writeAtRule(atrule);
+void CssPrettyWriter::writeAtRule(const string &keyword, const TokenList &rule) {
+  indent();
+  
+  CssWriter::writeAtRule(keyword, rule);
   out->write("\n", 1);
 }
 
-void CssPrettyWriter::writeRuleset(Ruleset* ruleset) {
-  TokenList* selector = ruleset->getSelector();
-  TokenListIterator* it;
+void CssPrettyWriter::writeRulesetStart(const TokenList &selector) {
+  TokenList::const_iterator it;
   
-  vector<Declaration*>* declarations = ruleset->getDeclarations();
-  vector<Declaration*>::iterator dIt;
-
-  if (declarations->size() == 0)
-    return;
+  indent();
   
-  if (selector != NULL) {
-    for (it = selector->iterator(); it->hasNext();) {
-      Token* next = it->next();
-      out->write(next->str.c_str(), next->str.size());
+  for (it = selector.begin(); it != selector.end(); it++) {
+    out->write((*it).c_str(), (*it).size());
+      
+    if ((*it) == ",") {
+      out->write("\n", 1);
+      indent();
     }
   }
-  out->write("{\n", 2);
-  for (dIt = declarations->begin(); dIt < declarations->end(); dIt++) {
-    out->write("    ", 4);
-    writeDeclaration(*dIt);
-    out->write(";\n", 2);
+  
+  out->write(" {\n", 3);
+  indent_size++;
+}
+
+void CssPrettyWriter::writeRulesetEnd() {
+  out->write(";\n", 2);
+  indent_size--;
+  indent();
+  out->write("}\n", 2);
+}
+void CssPrettyWriter::writeDeclaration(const string &property,
+                                       const TokenList &value) {
+  TokenList::const_iterator it;
+
+  indent();
+    
+  out->write(property.c_str(), property.size());
+  out->write(": ", 2);
+
+  it = value.begin();
+
+  while(it != value.end() &&
+        (*it).type == Token::WHITESPACE) {
+    it++;
   }
+  
+  for (; it != value.end(); it++) {
+    out->write((*it).c_str(), (*it).size());
+  }
+}
+void CssPrettyWriter::writeDeclarationDeliminator() {
+  out->write(";\n", 2);  
+}
+
+void CssPrettyWriter::writeMediaQueryStart(const TokenList &selector) {
+  TokenList::const_iterator it;
+  
+  for (it = selector.begin(); it != selector.end(); it++) {
+    out->write((*it).c_str(), (*it).size());
+  }
+  
+  out->write(" {\n", 3);
+  indent_size++;
+}
+
+void CssPrettyWriter::writeMediaQueryEnd() {
+  indent_size--;
   out->write("}\n", 2);
 }

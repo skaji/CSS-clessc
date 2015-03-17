@@ -27,12 +27,17 @@
 
 #include "LessTokenizer.h"
 #include "LessParser.h"
-#include "value/ValueProcessor.h"
-#include "ParameterRulesetLibrary.h"
 #include "CssWriter.h"
 #include "CssPrettyWriter.h"
 #include "Stylesheet.h"
 #include "IOException.h"
+#include "LessStylesheet.h"
+
+#include <config.h>
+
+#ifdef WITH_LIBGLOG
+#include <glog/logging.h>
+#endif
 
 using namespace std;
 
@@ -52,41 +57,98 @@ void usage () {
 }
 
 
-Stylesheet* processInput(istream* in){
-  ValueProcessor vp;
-  ParameterRulesetLibrary pr(&vp);
-  LessTokenizer tokenizer(in);
-  LessParser parser(&tokenizer, &pr, &vp);
-  Stylesheet* s = new Stylesheet();
+bool parseInput(LessStylesheet &stylesheet, istream &in, const std::string &source){
+  std::list<std::string> sources;
+  std::list<std::string>::iterator i;
+  
+  LessTokenizer tokenizer(in, source);
+  LessParser parser(tokenizer, sources);
+  sources.push_back(source);
   
   try{
-    parser.parseStylesheet(s);
+    parser.parseStylesheet(stylesheet);
+  } catch(ParseException* e) {
+#ifdef WITH_LIBGLOG
+    LOG(ERROR) << e->getSource() << ": Line " << e->getLineNumber() << ", Column " << 
+      e->getColumn() << " Parse Error: " << e->what();
+#else
+    cerr << e->getSource() << ": Line " << e->getLineNumber() << ", Column " << 
+      e->getColumn() << " Parse Error: " << e->what();
+#endif
+    
+    return false;
+    
   } catch(exception* e) {
-    cerr << "Line " << tokenizer.getLineNumber() << ", Column " << 
-      tokenizer.getColumn() << " Parse Error: " << e->what() << endl;
-    return NULL;
+#ifdef WITH_LIBGLOG
+    LOG(ERROR) << "Line " << tokenizer.getLineNumber() << ", Column " <<
+      tokenizer.getColumn() << " Error: " << e->what();
+#else
+    cerr << "Line " << tokenizer.getLineNumber() << ", Column " <<
+      tokenizer.getColumn() << " Error: " << e->what();
+#endif
+    return false;
   }
-  
-  return s;
+#ifdef WITH_LIBGLOG
+  VLOG(1) << "Source files: ";
+  for(i = sources.begin(); i != sources.end(); i++) {
+    VLOG(1) << (*i);
+  }
+#endif
+  return true;
 }
-void writeOutput (ostream* out, Stylesheet* stylesheet, bool format) {
-  CssWriter *w;
-  w = format ? new CssPrettyWriter(out) : new CssWriter(out);
-  
-  w->writeStylesheet(stylesheet);
-  *out << endl;
-  delete w;
+void writeOutput (ostream &out, LessStylesheet &stylesheet, bool format) {
+  Stylesheet css;
+  ProcessingContext context;
+  CssWriter *w1;
+  w1 = format ? new CssPrettyWriter(out) : new CssWriter(out);
+
+  try{
+    stylesheet.process(css, context);
+
+  } catch(ParseException* e) {
+#ifdef WITH_LIBGLOG
+    LOG(ERROR) << e->getSource() << ": Line " << e->getLineNumber() << ", Column " << 
+      e->getColumn() << " Parse Error: " << e->what();
+#else
+    cerr << e->getSource() << ": Line " << e->getLineNumber() << ", Column " << 
+      e->getColumn() << " Parse Error: " << e->what();
+#endif
+
+    return;
+  } catch(exception* e) {
+#ifdef WITH_LIBGLOG
+    LOG(ERROR) << "Error: " << e->what();
+#else
+    cerr << "Error: " << e->what();
+#endif
+    return;
+  }
+
+  css.write(*w1);
+  out << endl;
+  delete w1;
 }
 
 int main(int argc, char * argv[]){
-  Stylesheet* s;
   istream* in = &cin;
   ostream* out = &cout;
   bool formatoutput = false;
+  string source = "-";
+  LessStylesheet stylesheet;
+
+#ifdef WITH_LIBGLOG
+  FLAGS_logtostderr = 1;
+  google::InitGoogleLogging(argv[0]);
+  VLOG(1) << "Start.";
+#endif
   
   try {
     int c;
-    while((c = getopt(argc, argv, ":o:hf")) != EOF) {
+#ifdef WITH_LIBGLOG
+    VLOG(3) << "argc: " << argc;
+#endif
+
+    while((c = getopt(argc, argv, ":o:hfv:")) != EOF) {
       switch (c) {
       case 'h':
         usage();
@@ -97,24 +159,38 @@ int main(int argc, char * argv[]){
       case 'f':
         formatoutput = true;
         break;
+      case 'v':
+#ifdef WITH_LIBGLOG
+        FLAGS_v = atoi(optarg);
+#else
+        std::cerr << "Warning: -v flag not supported: lessc has to be compiled with libglog.\n";
+#endif
+        break;
       }
     }
-
+    
     if(argc - optind >= 1){
+#ifdef WITH_LIBGLOG
+      VLOG(1) << argv[optind];
+#endif
+      
       in = new ifstream(argv[optind]);
+      source = argv[optind];
       if (in->fail() || in->bad())
         throw new IOException("Error opening file");
     }
-
-    s = processInput(in);
-    if (s != NULL) {
-      writeOutput(out, s, formatoutput);
-      delete s;
+    
+    if (parseInput(stylesheet, *in, source)) {
+        writeOutput(*out, stylesheet, formatoutput);
     } else
       return 1;
 
   } catch (IOException* e) {
-    cerr << " Error: " << e->what() << endl;
+#ifdef WITH_LIBGLOG
+    LOG(ERROR) << " Error: " << e->what();
+#else
+    cerr << " Error: " << e->what();
+#endif
     return 1;
   }
 		

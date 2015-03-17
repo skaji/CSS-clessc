@@ -30,29 +30,32 @@
 class FunctionLibrary;
 
 class NumberValue: public Value {
-  static bool isNumber(Value* val);
+  static bool isNumber(const Value &val);
 
-  void verifyUnits(NumberValue* v);
-  bool convert(string unit);
+  void verifyUnits(const NumberValue &n);
+  double convert(const std::string &unit) const;
   
 public:
-  NumberValue(Token* token);
+  NumberValue(Token &token);
+  NumberValue(double value);
   virtual ~NumberValue();
   
-  virtual Value* add(Value* v);
-  virtual Value* substract(Value* v);
-  virtual Value* multiply(Value* v);
-  virtual Value* divide(Value* v);
-  virtual int compare(Value* v);
+  virtual Value* add(const Value &v) const;
+  virtual Value* substract(const Value &v) const;
+  virtual Value* multiply(const Value &v) const;
+  virtual Value* divide(const Value &v) const;
 
-  void setType(Value* v);
+  virtual BooleanValue* equals(const Value &v) const;
+  virtual BooleanValue* lessThan(const Value &v) const;
+
+  void setType(const NumberValue &n);
   
-  string getUnit();
-  void setUnit(string unit);
-  double getValue();
+  string getUnit() const;
+  void setUnit(std::string unit);
+  double getValue() const;
   void setValue(double d);
 
-  static void loadFunctions(FunctionLibrary* lib);
+  static void loadFunctions(FunctionLibrary &lib);
   static Value* unit(vector<Value*> args);
   static Value* ceil(vector<Value*> args);
   static Value* floor(vector<Value*> args);

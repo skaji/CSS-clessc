@@ -31,31 +31,39 @@
 
 class StringValue: public Value {
 private:
-  string stringvalue;
+  std::string strvalue;
   bool quotes;
 
+  void updateTokens();
+
 public:
-  StringValue(Token* token);
-  StringValue(Token* token, bool quotes);
+  StringValue(Token &token);
+  StringValue(Token &token, bool quotes);
+  StringValue(std::string &str, bool quotes);
+  StringValue(const StringValue &s);
+  StringValue(const Value &val, bool quotes);
+  
   virtual ~StringValue();
   
-  virtual TokenList* getTokens();
-
-  string getString();
-  void setString(string stringValue);
+  std::string getString() const;
+  void setString(const std::string &stringValue);
   
   void setQuotes(bool quotes);
-  bool getQuotes();
-  
-  virtual Value* add(Value* v);
-  virtual Value* substract(Value* v);
-  virtual Value* multiply(Value* v);
-  virtual Value* divide(Value* v);
-  virtual int compare(Value* v);
+  bool getQuotes() const;
+
+  void append(const Value &v);
+
+  virtual Value* add(const Value &v) const;
+  virtual Value* substract(const Value &v) const;
+  virtual Value* multiply(const Value &v) const;
+  virtual Value* divide(const Value &v) const;
+
+  virtual BooleanValue* equals(const Value &v) const;
+  virtual BooleanValue* lessThan(const Value &v) const;
 
   static string escape(string rawstr, string extraUnreserved = "");
 
-  static void loadFunctions(FunctionLibrary* lib);
+  static void loadFunctions(FunctionLibrary &lib);
   static Value* escape(vector<Value*> arguments);
   static Value* e(vector<Value*> arguments);
   static Value* format(vector<Value*> arguments);

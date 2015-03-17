@@ -20,7 +20,7 @@
  */
 
 #include "Value.h"
-#include <iostream>
+#include "BooleanValue.h"
 
 Value::Value() {
 }
@@ -28,26 +28,61 @@ Value::Value() {
 Value::~Value() {
 }
 
-TokenList* Value::getTokens() {
+const TokenList* Value::getTokens() const{
   return &tokens;
 }
-Value* Value::equals(Value* v) {
-  return new BooleanValue(this->compare(v) == 0);
-}
-Value* Value::lessThan(Value* v) {
-  return new BooleanValue(this->compare(v) < 0);
-}
-Value* Value::greaterThan(Value* v) {
-  return new BooleanValue(this->compare(v) > 0);
-}
-Value* Value::lessThanEquals(Value* v) {
-  return new BooleanValue(this->compare(v) <= 0);
-}
-Value* Value::greaterThanEquals(Value* v) {
-  return new BooleanValue(this->compare(v) >= 0);
+
+BooleanValue* Value::lessThan(const Value &v) const {
+  return new BooleanValue(this->type < v.type ||
+                          (this->type == v.type &&
+                           getTokens() < v.getTokens()));
 }
 
-const char* Value::typeToString(Type t) {
+
+BooleanValue* Value::equals(const Value &v) const {
+  return new BooleanValue(this->type == v.type &&
+                          getTokens() == v.getTokens());
+}
+
+BooleanValue* Value::greaterThan(const Value &v) const {
+  BooleanValue* ret = this->equals(v);
+
+  if (ret->getValue()) {
+    ret->setValue(false);
+    return ret;
+  }
+  delete ret;
+  
+  ret = this->lessThan(v);
+  ret->setValue(!ret->getValue());
+
+  return ret;
+}
+BooleanValue* Value::lessThanEquals(const Value &v) const {
+  BooleanValue* ret = this->equals(v);
+
+  if (ret->getValue())
+    return ret;
+
+  delete ret;
+
+  ret = this->lessThan(v);
+  return ret;
+}
+BooleanValue* Value::greaterThanEquals(const Value &v) const {
+  BooleanValue* ret = this->equals(v);
+
+  if (ret->getValue())
+    return ret;
+
+  delete ret;
+
+  ret = this->lessThan(v);
+  ret->setValue(!ret->getValue());
+  return ret;
+}
+
+const char* Value::typeToString(const Type &t) {
   switch (t) {
   case NUMBER:
     return "Number";
@@ -68,7 +103,7 @@ const char* Value::typeToString(Type t) {
   }
   return "Undefined";
 }
-Value::Type Value::codeToType(char code) {
+Value::Type Value::codeToType(const char code) {
   switch (code) {
   case 'N':
     return NUMBER;

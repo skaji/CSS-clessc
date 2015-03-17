@@ -24,22 +24,51 @@
 Token::Token () {
   type = OTHER;
 }
-Token::Token (string s, Type t) {
-  str = s;
+Token::Token (const std::string &s, Type t) {
   type = t;
-}
-  
-void Token::add(char c) {
-  str.append(1, c);
+  append(s);
 }
   
 void Token::clear () {
-  str.clear();
+  std::string::clear();
   type = OTHER;
 }
-bool Token::equals (Token* t) {
-  return (type == t->type && str == t->str);
+
+bool Token::stringHasQuotes() const {
+  return (at(0) == '"' ||
+          at(0) == '\'');
 }
-Token* Token::clone () {
-  return new Token(str, type);
+
+void Token::removeQuotes() {
+  removeQuotes(*this);
 }
+
+void Token::removeQuotes(std::string &str) const {
+  char quote;
+  std::string::iterator i;
+  
+  if (str.size() == 0 || !(str[0] == '"' ||
+                           str[0] == '\''))
+    return;
+
+  quote = str[0];
+  str.erase(str.begin());
+  str.erase(str.end() - 1);
+
+  for (i = str.begin(); i != str.end(); i++) {
+    if (*i == '\\' && *(i + 1) == quote) 
+      str.erase(i);
+  }
+}
+
+
+std::string Token::getUrlString() const {
+  std::string ret;
+  if (type == URL) {
+    ret = substr(4, length() - 5);
+    removeQuotes(ret);
+    return ret;
+  } else
+    return "";
+}
+

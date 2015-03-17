@@ -38,28 +38,29 @@ class Color: public Value {
 private:
   unsigned int color[3];
   double alpha;
-  /**
-   * If set to true getTokens() will generate new tokens with the
-   * updated color data.
-   */
-  bool valueChanged;
   
-  double maxArray(double* array, int len);
-  double minArray(double* array, int len);
+  double maxArray(double* array, const size_t len);
+  double minArray(double* array, const size_t len);
+
+  void updateTokens();
+  
 public:
-  Color(Token* token);
+  Color();
+  Color(Token &token);
   Color(unsigned int red, unsigned int green, unsigned int blue);
   Color(unsigned int red, unsigned int green, unsigned int blue,
         double alpha);
+  Color(const Color &color);
+
   virtual ~Color();
 
-  virtual TokenList* getTokens();
-  
-  virtual Value* add(Value* v);
-  virtual Value* substract(Value* v);
-  virtual Value* multiply(Value* v);
-  virtual Value* divide(Value* v);
-  virtual int compare(Value* v);
+  virtual Value* add(const Value &v) const;
+  virtual Value* substract(const Value &v) const;
+  virtual Value* multiply(const Value &v) const;
+  virtual Value* divide(const Value &v) const;
+
+  virtual BooleanValue* equals(const Value &v) const;
+  virtual BooleanValue* lessThan(const Value &v) const;
 
   /**
    * The HSL to RGB conversion on
@@ -69,35 +70,42 @@ public:
    * source. 
    */
   void setHSL(double hue, double saturation, double lightness);
+
   /**
    * Converts the internal RGB value to HSL. The source of the
    * calculations is http://en.wikipedia.org/wiki/HSL_and_HSV except
    * for the saturation value, which did not work.
    */
   double* getHSL();
+
+  /**
+   * Change the color to a new rgb value.
+   */
+  void setRGB(unsigned int red, unsigned int green, unsigned int blue);
+
   /**
    * Returns the the amount of red in the color.
    *
    * @return an int value between 0-255
    */
-  unsigned int getRed();
+  unsigned int getRed() const;
   /**
    * Returns the the amount of green in the color.
    *
    * @return an int value between 0-255
    */
-  unsigned int getGreen();
+  unsigned int getGreen() const;
   /**
    * Returns the the amount of blue in the color.
    *
    * @return an int value between 0-255
    */
-  unsigned int getBlue();
+  unsigned int getBlue() const;
 
   void setAlpha(double alpha);
-  double getAlpha();
+  double getAlpha() const;
   
-  static void loadFunctions(FunctionLibrary* lib);
+  static void loadFunctions(FunctionLibrary &lib);
   static Value* rgb(vector<Value*> arguments);
   static Value* rgba(vector<Value*> arguments);
   static Value* lighten(vector<Value*> arguments);
@@ -111,17 +119,18 @@ public:
   static Value* hue(vector<Value*> arguments);
   static Value* saturation(vector<Value*> arguments);
   static Value* lightness(vector<Value*> arguments);
-
+  static Value* argb(vector<Value*> arguments);
+  static Value* red(vector<Value*> arguments);
+  static Value* green(vector<Value*> arguments);
+  static Value* blue(vector<Value*> arguments);
+  static Value* _alpha(vector<Value*> arguments);
+  
   static Value* hsla(vector<Value*> arguments);
   static Value* hsv(vector<Value*> arguments);
   static Value* hsva(vector<Value*> arguments);
   static Value* hsvhue(vector<Value*> arguments);
   static Value* hsvsaturation(vector<Value*> arguments);
   static Value* hsvvalue(vector<Value*> arguments);
-  static Value* red(vector<Value*> arguments);
-  static Value* green(vector<Value*> arguments);
-  static Value* blue(vector<Value*> arguments);
-  static Value* _alpha(vector<Value*> arguments);
   static Value* luma(vector<Value*> arguments);
   static Value* fade(vector<Value*> arguments);
   static Value* mix(vector<Value*> arguments);
